@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/layout/app-shell';
 import {
   Search,
@@ -23,7 +24,22 @@ const statusOptions: { key: Status; label: string }[] = [
 ];
 
 export default function VisitFormPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="empty">
+          <div className="empty__title">Memuat form…</div>
+        </div>
+      }
+    >
+      <VisitForm />
+    </Suspense>
+  );
+}
+
+function VisitForm() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [student, setStudent] = useState<any | null>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
@@ -39,6 +55,19 @@ export default function VisitFormPage() {
   const [treatment, setTreatment] = useState('');
   const [finalStatus, setFinalStatus] = useState<Status>('back_to_class');
   const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    const id = searchParams.get('student');
+    if (!id) return;
+    (async () => {
+      const { data } = await supabase.from('students').select('*').eq('id', id).maybeSingle();
+      if (data) {
+        setStudent(data);
+        setQuery(data.full_name);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     const timer = setTimeout(async () => {

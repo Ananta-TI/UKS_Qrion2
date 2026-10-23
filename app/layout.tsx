@@ -17,7 +17,13 @@ const themeScript = `(function(d){try{var t=localStorage.getItem('uks:theme')||'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" data-theme="light" data-accent="ocean" className={urbanist.variable}>
+    <html
+      lang="id"
+      data-theme="light"
+      data-accent="ocean"
+      className={urbanist.variable}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
