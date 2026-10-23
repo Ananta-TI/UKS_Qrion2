@@ -14,6 +14,7 @@ import {
   Search,
   ChevronRight,
   UserRound,
+  LifeBuoy,
 } from 'lucide-react';
 
 const pages = [
@@ -23,6 +24,7 @@ const pages = [
   { label: 'Catat Kunjungan', sub: 'Form pemeriksaan & tindakan', href: '/visits/new', icon: Plus },
   { label: 'Inventaris', sub: 'Stok obat & kedaluwarsa', href: '/inventory', icon: Package },
   { label: 'Laporan', sub: 'Statistik & export PDF/Excel', href: '/reports', icon: BarChart3 },
+  { label: 'Pusat Bantuan', sub: 'Panduan, FAQ, dan kontak admin', href: '/support', icon: LifeBuoy },
 ];
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {

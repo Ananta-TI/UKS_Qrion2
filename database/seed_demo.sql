@@ -5,7 +5,12 @@
 --             visits & medicine_logs agar data demo tidak dobel.
 -- ============================================================
 
--- 1) Pastikan ada profil staf (FK visits.staff_id)
+-- 1) Sekolah default (wajib ada setelah migration_multi_tenant)
+insert into public.schools (name, slug, address)
+select 'Sekolah Demo', 'sekolah-demo', 'Alamat sekolah'
+where not exists (select 1 from public.schools);
+
+-- 2) Pastikan ada profil staf (FK visits.staff_id)
 do $$
 declare uid uuid;
 begin
@@ -15,18 +20,27 @@ begin
     if uid is null then
       raise exception 'Belum ada user. Login/daftar lewat aplikasi dulu, lalu jalankan seed ini lagi.';
     end if;
-    insert into public.profiles (id, full_name, role)
-    values (uid, 'Petugas UKS', 'admin')
+    insert into public.profiles (id, full_name, role, school_id)
+    values (uid, 'Petugas UKS', 'staff', (select id from public.schools order by created_at limit 1))
     on conflict (id) do nothing;
   end if;
 end $$;
 
--- 2) Bersihkan kunjungan lama (data demo)
-delete from public.medicine_logs;
-delete from public.visits;
+-- 3) Bersihkan data demo (hanya sekolah demo)
+delete from public.medicine_logs
+where school_id = (select id from public.schools order by created_at limit 1);
+delete from public.visits
+where school_id = (select id from public.schools order by created_at limit 1);
+delete from public.students
+where school_id = (select id from public.schools order by created_at limit 1);
+delete from public.medicines
+where school_id = (select id from public.schools order by created_at limit 1);
 
--- 3) Siswa (60)
-insert into public.students (nis, full_name, class, blood_type, allergies, chronic_diseases) values
+-- 4) Siswa (60)
+insert into public.students (school_id, nis, full_name, class, blood_type, allergies, chronic_diseases)
+select sc.id, v.*
+from (select id from public.schools order by created_at limit 1) sc,
+     (values
   ('2024001', 'Ahmad Fauzi', '7A', 'O', 'Udang, debu', 'Asma'),
   ('2024002', 'Bella Putri Anggraini', '7A', 'A', '', ''),
   ('2024003', 'Dimas Prasetyo', '7A', 'B', '', ''),
@@ -87,11 +101,14 @@ insert into public.students (nis, full_name, class, blood_type, allergies, chron
   ('2024058', 'Fajar Ramadhan', '9C', 'O', '', 'Asma'),
   ('2024059', 'Gisella Anastasia', '9C', 'A', '', ''),
   ('2024060', 'Hadi Pranoto', '9C', 'B', '', '')
-on conflict (nis) do nothing;
+     ) as v(nis, full_name, class, blood_type, allergies, chronic_diseases)
+on conflict (school_id, nis) do nothing;
 
--- 4) Obat (18) — sebagian sengaja menipis & mendekati kedaluwarsa
-insert into public.medicines (name, category, unit, stock, min_stock, location, expiry_date)
-select v.* from (values
+-- 5) Obat (18) — sebagian sengaja menipis & mendekati kedaluwarsa
+insert into public.medicines (school_id, name, category, unit, stock, min_stock, location, expiry_date)
+select sc.id, v.*
+from (select id from public.schools order by created_at limit 1) sc,
+     (values
   ('Paracetamol 500mg',        'Analgesik/Antipiretik', 'strip', 24,  5,  'Rak A1', current_date + 300),
   ('Paracetamol Sirup',        'Antipiretik',           'botol', 8,   3,  'Rak A1', current_date + 210),
   ('Amoxicillin 500mg',        'Antibiotik',            'strip', 4,   5,  'Rak A2', current_date + 150),
@@ -113,7 +130,7 @@ select v.* from (values
 ) as v(name, category, unit, stock, min_stock, location, expiry_date)
 where not exists (select 1 from public.medicines m where m.name = v.name);
 
--- 5) Daftar keluhan + tindakan + status (dipakai acak berbobot)
+-- 6) Daftar keluhan + tindakan + status (dipakai acak berbobot)
 drop table if exists _demo_complaint;
 create temp table _demo_complaint (
   id serial primary key,
@@ -163,12 +180,13 @@ insert into _demo_complaint (complaint, treatment, tmin, tmax, status, notes) va
   ('Pilek',              'Vitamin C',                     36.5, 37.3, 'back_to_class', 'Bersin pagi hari'),
   ('Batuk',              'OBH Combi',                     36.6, 37.4, 'back_to_class', 'Batuk ringan');
 
--- 6) Kunjungan (180 baris: 14 hari ini, sisanya tersebar 90 hari)
+-- 7) Kunjungan (180 baris: 14 hari ini, sisanya tersebar 90 hari)
 insert into public.visits (
-  student_id, staff_id, check_in_at, check_out_at, chief_complaint,
+  school_id, student_id, staff_id, check_in_at, check_out_at, chief_complaint,
   temperature, blood_pressure, weight, height, treatment, final_status, notes
 )
 select
+  (select id from public.schools order by created_at limit 1),
   s.id,
   (select id from public.profiles order by created_at limit 1),
   t.ts,
@@ -210,7 +228,7 @@ cross join lateral (
   end as ts
 ) t;
 
--- 7) Ringkasan hasil
+-- 8) Ringkasan hasil
 select
   (select count(*) from public.students) as siswa,
   (select count(*) from public.medicines) as obat,

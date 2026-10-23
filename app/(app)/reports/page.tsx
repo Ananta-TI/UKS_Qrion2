@@ -3,18 +3,51 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { AppShell } from '@/components/layout/app-shell';
-import { FileText, Download, Search, BarChart3, RefreshCw, ClipboardList } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowUpRight,
+  BarChart3,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Download,
+  FileText,
+  Star,
+  Stethoscope,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
 const ranges = [
-  { key: 'today', label: 'Hari Ini' },
-  { key: 'week', label: 'Minggu' },
-  { key: 'month', label: 'Bulan' },
-  { key: 'year', label: 'Tahun' },
+  { key: '30d', label: '30 hari', days: 30 },
+  { key: '3m', label: '3 bulan', days: 90 },
+  { key: '6m', label: '6 bulan', days: 180 },
+  { key: '12m', label: '12 bulan', days: 365 },
+  { key: 'all', label: 'Semua', days: 0 },
 ] as const;
 
-type Range = (typeof ranges)[number]['key'];
+type RangeKey = (typeof ranges)[number]['key'];
+type Metric = 'visits' | 'students' | 'returned' | 'referred' | 'picked';
+type GroupBy = 'month' | 'class' | 'complaint' | 'status';
+type ChartKind = 'area' | 'bars';
+type Tab = 'overview' | 'builder';
+
+const metrics: { key: Metric; label: string; desc: string; icon: typeof ClipboardList }[] = [
+  { key: 'visits', label: 'Kunjungan', desc: 'Jumlah kunjungan UKS', icon: ClipboardList },
+  { key: 'students', label: 'Siswa unik', desc: 'Siswa berbeda yang datang', icon: Users },
+  { key: 'returned', label: 'Kembali ke kelas', desc: 'Siswa yang langsung belajar lagi', icon: CheckCircle2 },
+  { key: 'referred', label: 'Rujukan', desc: 'Dirujuk ke faskes / RS', icon: AlertCircle },
+  { key: 'picked', label: 'Dijemput', desc: 'Dijemput orang tua', icon: Stethoscope },
+];
+
+const groupOptions: { key: GroupBy; label: string }[] = [
+  { key: 'month', label: 'Bulan' },
+  { key: 'class', label: 'Kelas' },
+  { key: 'complaint', label: 'Keluhan' },
+  { key: 'status', label: 'Status' },
+];
 
 const statusMap: Record<string, { label: string; cls: string; color: string }> = {
   back_to_class: { label: 'Kembali ke Kelas', cls: 'badge badge--good', color: 'var(--good)' },
@@ -22,30 +55,255 @@ const statusMap: Record<string, { label: string; cls: string; color: string }> =
   picked_up: { label: 'Dijemput Orang Tua', cls: 'badge badge--warn', color: 'var(--warn)' },
 };
 
-const barTones = ['var(--iris)', 'var(--sky)', 'var(--teal)', 'var(--amber)', 'var(--coral)'];
+type VisitRow = {
+  id: string;
+  student_id: string | null;
+  check_in_at: string;
+  chief_complaint: string | null;
+  treatment: string | null;
+  final_status: string | null;
+  students?: { id: string; full_name: string | null; nis: string | null; class: string | null } | null;
+};
+
+type GroupDatum = { key: string; label: string; value: number };
+
+type SavedReport = {
+  id: string;
+  name: string;
+  metric: Metric;
+  groupBy: GroupBy;
+  chart: ChartKind;
+  range: RangeKey;
+  createdAt: string;
+};
+
+function monthKey(iso: string) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function buildGroups(visits: VisitRow[], groupBy: GroupBy, metric: Metric): GroupDatum[] {
+  const buckets = new Map<string, { label: string; count: number; students: Set<string> }>();
+
+  for (const v of visits) {
+    const matches =
+      metric === 'visits' || metric === 'students'
+        ? true
+        : (metric === 'returned' && v.final_status === 'back_to_class') ||
+          (metric === 'referred' && v.final_status === 'referred') ||
+          (metric === 'picked' && v.final_status === 'picked_up');
+
+    if (!matches) continue;
+
+    let key = '';
+    let label = '';
+
+    if (groupBy === 'month') {
+      const d = new Date(v.check_in_at);
+      key = monthKey(v.check_in_at);
+      label = d.toLocaleDateString('id-ID', { month: 'short' });
+    } else if (groupBy === 'class') {
+      label = v.students?.class || 'Tanpa kelas';
+      key = label;
+    } else if (groupBy === 'complaint') {
+      label = v.chief_complaint || 'Lainnya';
+      key = label;
+    } else {
+      label = statusMap[v.final_status ?? '']?.label ?? 'Belum diisi';
+      key = label;
+    }
+
+    const bucket = buckets.get(key) ?? { label, count: 0, students: new Set<string>() };
+    bucket.count += 1;
+    if (v.student_id) bucket.students.add(v.student_id);
+    buckets.set(key, bucket);
+  }
+
+  const rows = [...buckets.entries()].map(([key, b]) => ({
+    key,
+    label: b.label,
+    value: metric === 'students' ? b.students.size : b.count,
+  }));
+
+  return groupBy === 'month'
+    ? rows.sort((a, b) => a.key.localeCompare(b.key))
+    : rows.sort((a, b) => b.value - a.value);
+}
+
+function smoothPath(points: [number, number][]) {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0][0]} ${points[0][1]}`;
+
+  let d = `M ${points[0][0]} ${points[0][1]}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] ?? points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] ?? p2;
+    const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2[0]} ${p2[1]}`;
+  }
+  return d;
+}
+
+function AreaChart({ data, id }: { data: GroupDatum[]; id: string }) {
+  const width = 720;
+  const height = 240;
+  const padX = 8;
+  const padTop = 14;
+  const padBottom = 30;
+  const innerH = height - padTop - padBottom;
+  const max = Math.max(1, ...data.map((d) => d.value));
+  const step = data.length > 1 ? (width - padX * 2) / (data.length - 1) : 0;
+
+  const points: [number, number][] = data.map((d, i) => [
+    padX + i * step,
+    padTop + innerH - (d.value / max) * innerH,
+  ]);
+
+  if (data.length < 2) {
+    return (
+      <div className="empty" style={{ padding: '32px 8px' }}>
+        <BarChart3 className="ico" />
+        <div className="empty__text">Data belum cukup untuk menggambar tren. Pilih periode yang lebih panjang.</div>
+      </div>
+    );
+  }
+
+  const line = smoothPath(points);
+  const area = `${line} L ${points[points.length - 1][0]} ${padTop + innerH} L ${points[0][0]} ${padTop + innerH} Z`;
+  const labelEvery = Math.ceil(data.length / 12);
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="rpt__svg" role="img" aria-label="Grafik tren">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--coral)" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="var(--coral)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {[0, 0.33, 0.66, 1].map((t) => (
+        <line
+          key={t}
+          x1={padX}
+          x2={width - padX}
+          y1={padTop + innerH * t}
+          y2={padTop + innerH * t}
+          stroke="var(--line)"
+          strokeDasharray="4 6"
+        />
+      ))}
+
+      <path d={area} fill={`url(#${id})`} />
+      <path d={line} fill="none" stroke="var(--coral)" strokeWidth="2.5" strokeLinecap="round" />
+
+      {points.map(([x, y], i) => (
+        <circle key={data[i].key} cx={x} cy={y} r="3.5" fill="var(--coral)" stroke="var(--surface)" strokeWidth="2">
+          <title>{`${data[i].label}: ${data[i].value}`}</title>
+        </circle>
+      ))}
+
+      {data.map((d, i) =>
+        i % labelEvery === 0 ? (
+          <text key={d.key} x={points[i][0]} y={height - 8} textAnchor="middle" className="rpt__axis">
+            {d.label}
+          </text>
+        ) : null
+      )}
+    </svg>
+  );
+}
+
+function BarsChart({ data }: { data: GroupDatum[] }) {
+  const max = Math.max(1, ...data.map((d) => d.value));
+
+  return (
+    <div className="rpt__bars">
+      {data.map((d) => (
+        <div key={d.key} className="rpt__bcol" title={`${d.label}: ${d.value}`}>
+          <span className="rpt__bval">{d.value}</span>
+          <div className="rpt__btrack">
+            <span
+              className="rpt__bfill"
+              style={{ height: `${Math.max((d.value / max) * 100, 2)}%` }}
+            />
+          </div>
+          <span className="rpt__blabel" title={d.label}>
+            {d.label.length > 9 ? d.label.slice(0, 8) + '…' : d.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Gauge({ pct }: { pct: number }) {
+  const r = 64;
+  const cx = 90;
+  const cy = 92;
+  const circ = Math.PI * r;
+  const d = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
+
+  return (
+    <svg viewBox="0 0 180 112" className="rpt__gauge" role="img" aria-label={`${pct}% kembali ke kelas`}>
+      <path d={d} fill="none" stroke="var(--well)" strokeWidth="14" strokeLinecap="round" />
+      <path
+        d={d}
+        fill="none"
+        stroke="var(--good)"
+        strokeWidth="14"
+        strokeLinecap="round"
+        strokeDasharray={`${(Math.min(pct, 100) / 100) * circ} ${circ}`}
+      />
+      <text x={cx} y={cy - 12} textAnchor="middle" className="rpt__gaugeval">
+        {pct}%
+      </text>
+      <text x={cx} y={cy + 6} textAnchor="middle" className="rpt__gaugelab">
+        kembali ke kelas
+      </text>
+    </svg>
+  );
+}
 
 export default function ReportsPage() {
   const supabase = createClient();
-  const [visits, setVisits] = useState<any[]>([]);
+  const [visits, setVisits] = useState<VisitRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState<Range>('today');
+  const [range, setRange] = useState<RangeKey>('6m');
   const [query, setQuery] = useState('');
+  const [tab, setTab] = useState<Tab>('overview');
+
+  const [metric, setMetric] = useState<Metric>('visits');
+  const [groupBy, setGroupBy] = useState<GroupBy>('month');
+  const [chart, setChart] = useState<ChartKind>('area');
+  const [saved, setSaved] = useState<SavedReport[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('uks:saved-reports');
+      if (raw) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSaved(JSON.parse(raw) as SavedReport[]);
+      }
+    } catch {}
+  }, []);
 
   async function load() {
     setLoading(true);
+    const selected = ranges.find((r) => r.key === range) ?? ranges[2];
     let q = supabase.from('visits').select('*, students(*)').order('check_in_at', { ascending: false });
-    const now = new Date();
-    if (range === 'today') {
-      q = q.gte('check_in_at', new Date(now.setHours(0, 0, 0, 0)).toISOString());
-    } else if (range === 'week') {
-      q = q.gte('check_in_at', new Date(now.setDate(now.getDate() - 7)).toISOString());
-    } else if (range === 'month') {
-      q = q.gte('check_in_at', new Date(now.setMonth(now.getMonth() - 1)).toISOString());
-    } else if (range === 'year') {
-      q = q.gte('check_in_at', new Date(now.setFullYear(now.getFullYear() - 1)).toISOString());
+
+    if (selected.days > 0) {
+      const since = new Date(Date.now() - selected.days * 86400000);
+      q = q.gte('check_in_at', since.toISOString());
     }
+
     const { data } = await q;
-    setVisits(data ?? []);
+    setVisits((data ?? []) as VisitRow[]);
     setLoading(false);
   }
 
@@ -53,22 +311,17 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, query]);
+  }, [range]);
 
-  const filtered = visits.filter(
-    (v) =>
-      !query ||
-      v.students?.full_name?.toLowerCase().includes(query.toLowerCase()) ||
-      v.students?.nis?.includes(query)
-  );
+  const rangeInfo = ranges.find((r) => r.key === range) ?? ranges[2];
 
-  const complaintCounts: Record<string, number> = {};
-  filtered.forEach((v) => {
-    const c = v.chief_complaint || 'Lainnya';
-    complaintCounts[c] = (complaintCounts[c] || 0) + 1;
+  const filtered = visits.filter((v) => {
+    if (!query) return true;
+    const term = query.toLowerCase();
+    return Boolean(
+      v.students?.full_name?.toLowerCase().includes(term) || v.students?.nis?.toLowerCase().includes(term)
+    );
   });
-  const topComplaints = Object.entries(complaintCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const maxComplaint = topComplaints[0]?.[1] ?? 1;
 
   const statusCounts: Record<string, number> = {};
   filtered.forEach((v) => {
@@ -76,12 +329,115 @@ export default function ReportsPage() {
     statusCounts[s] = (statusCounts[s] || 0) + 1;
   });
 
+  const total = filtered.length;
+  const uniqueStudents = new Set(filtered.map((v) => v.student_id)).size;
+  const returned = statusCounts['back_to_class'] ?? 0;
+  const returnRate = total ? Math.round((returned / total) * 100) : 0;
+
+  const activeDays = new Set(filtered.map((v) => v.check_in_at.slice(0, 10))).size;
+  const avgPerDay = activeDays ? (total / activeDays).toFixed(1) : '0';
+
+  const monthly = buildGroups(filtered, 'month', 'visits');
+  const byClass = buildGroups(filtered, 'class', 'visits').slice(0, 8);
+  const complaints = buildGroups(filtered, 'complaint', 'visits').slice(0, 6);
+  const maxComplaint = Math.max(1, ...complaints.map((c) => c.value));
+
+  const studentMap = new Map<string, { id: string; name: string; nis: string; klass: string; count: number }>();
+  filtered.forEach((v) => {
+    if (!v.student_id) return;
+    const cur =
+      studentMap.get(v.student_id) ?? {
+        id: v.student_id,
+        name: v.students?.full_name ?? '-',
+        nis: v.students?.nis ?? '-',
+        klass: v.students?.class ?? '-',
+        count: 0,
+      };
+    cur.count += 1;
+    studentMap.set(v.student_id, cur);
+  });
+  const topStudents = [...studentMap.values()].sort((a, b) => b.count - a.count).slice(0, 10);
+  const maxStudentVisits = Math.max(1, ...topStudents.map((s) => s.count));
+
+  const metricInfo = metrics.find((m) => m.key === metric) ?? metrics[0];
+  const groupInfo = groupOptions.find((g) => g.key === groupBy) ?? groupOptions[0];
+  const builderGroups = buildGroups(visits, groupBy, metric);
+  const builderTotal = builderGroups.reduce((sum, g) => sum + g.value, 0);
+  const builderMax = Math.max(1, ...builderGroups.map((g) => g.value));
+  const highest = builderGroups.reduce<GroupDatum | null>(
+    (best, g) => (!best || g.value > best.value ? g : best),
+    null
+  );
+  const lowest = builderGroups.reduce<GroupDatum | null>(
+    (best, g) => (!best || g.value < best.value ? g : best),
+    null
+  );
+
+  function persist(next: SavedReport[]) {
+    setSaved(next);
+    try {
+      localStorage.setItem('uks:saved-reports', JSON.stringify(next));
+    } catch {}
+  }
+
+  function saveReport() {
+    const fallback = `${metricInfo.label} per ${groupInfo.label}`;
+    const name = window.prompt('Nama laporan:', fallback)?.trim();
+    if (!name) return;
+
+    const item: SavedReport = {
+      id: crypto.randomUUID(),
+      name,
+      metric,
+      groupBy,
+      chart,
+      range,
+      createdAt: new Date().toISOString(),
+    };
+
+    persist([item, ...saved].slice(0, 12));
+  }
+
+  function applyReport(item: SavedReport) {
+    setMetric(item.metric);
+    setGroupBy(item.groupBy);
+    setChart(item.chart);
+    setRange(item.range);
+  }
+
+  function deleteReport(id: string) {
+    persist(saved.filter((r) => r.id !== id));
+  }
+
+  function exportBuilderCSV() {
+    const rows = [
+      ['Kelompok', metricInfo.label, 'Persentase'],
+      ...builderGroups.map((g) => [
+        g.label,
+        String(g.value),
+        `${((g.value / (builderTotal || 1)) * 100).toFixed(1)}%`,
+      ]),
+    ];
+    const csv =
+      '\uFEFF' +
+      rows
+        .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `laporan-${metric}-${groupBy}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function exportPDF() {
     const doc = new jsPDF();
     doc.setFontSize(18);
     doc.text('Laporan Kunjungan UKS', 14, 22);
     doc.setFontSize(11);
-    doc.text(`Periode: ${range} | Dicetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 32);
+    doc.text(`Periode: ${rangeInfo.label} | Dicetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 32);
     const rows = filtered.map((v) => [
       new Date(v.check_in_at).toLocaleString('id-ID'),
       v.students?.full_name || '-',
@@ -101,7 +457,7 @@ export default function ReportsPage() {
   function exportExcel() {
     const csv = [
       ['Waktu', 'Siswa', 'NIS', 'Kelas', 'Keluhan', 'Suhu', 'TD', 'Berat', 'Tinggi', 'Tindakan', 'Status Akhir', 'Catatan'],
-      ...filtered.map((v) => [
+      ...filtered.map((v: any) => [
         new Date(v.check_in_at).toLocaleString('id-ID'),
         v.students?.full_name || '-',
         v.students?.nis || '-',
@@ -124,11 +480,12 @@ export default function ReportsPage() {
     a.href = url;
     a.download = `laporan-uks-${range}.xls`;
     a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
     <AppShell
-      title="Laporan & Statistik"
+      title="Laporan"
       crumbs={[{ label: 'UKS', href: '/' }, { label: 'Laporan' }]}
       actions={
         <>
@@ -141,170 +498,480 @@ export default function ReportsPage() {
         </>
       }
     >
-      <section className="kpis">
-        <div className="stat stat--dark">
-          <div className="stat__label"><span className="stat__ico"><ClipboardList className="ico" /></span>Total Kunjungan</div>
-          <div className="stat__value">{filtered.length}</div>
+      <div className="rpt__bar">
+        <div className="rpt__tabs" role="tablist" aria-label="Mode laporan">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'overview'}
+            className={tab === 'overview' ? 'rpt__tab is-active' : 'rpt__tab'}
+            onClick={() => setTab('overview')}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'builder'}
+            className={tab === 'builder' ? 'rpt__tab is-active' : 'rpt__tab'}
+            onClick={() => setTab('builder')}
+          >
+            Report builder
+          </button>
         </div>
-        <div className="stat stat--accent">
-          <div className="stat__label"><span className="stat__ico"><BarChart3 className="ico" /></span>Kembali Kelas</div>
-          <div className="stat__value">{statusCounts['back_to_class'] || 0}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label"><span className="stat__ico"><FileText className="ico" /></span>Dirujuk</div>
-          <div className="stat__value">{statusCounts['referred'] || 0}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label"><span className="stat__ico"><FileText className="ico" /></span>Dijemput Orang Tua</div>
-          <div className="stat__value">{statusCounts['picked_up'] || 0}</div>
-        </div>
-      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <div className="lg:col-span-2">
-          <div className="card" style={{ height: '100%' }}>
-            <div className="card__head">
-              <h2 className="card__title"><BarChart3 className="ico" />Keluhan Terbanyak</h2>
-              <div className="card__tools">
-                <div className="chips">
-                  {ranges.map((r) => (
-                    <button key={r.key} type="button" className="chip" aria-pressed={range === r.key} onClick={() => setRange(r.key)}>
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            {topComplaints.length === 0 ? (
-              <div className="empty">
-                <BarChart3 className="ico" />
-                <div className="empty__title">Belum ada data</div>
-                <div className="empty__text">Tidak ada kunjungan pada periode ini.</div>
-              </div>
-            ) : (
-              <div className="bars">
-                {topComplaints.map(([complaint, count], i) => (
-                  <div key={complaint} className="bars__col">
-                    <div className="bars__track">
-                      <span
-                        className="bars__bar"
-                        style={{ height: `${Math.max((count / maxComplaint) * 100, 8)}%`, background: barTones[i % barTones.length] }}
-                        title={`${complaint}: ${count}`}
-                      />
-                    </div>
-                    <span className="bars__lab" title={complaint}>
-                      {complaint.length > 10 ? complaint.slice(0, 9) + '…' : complaint}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+        <div className="chips">
+          {ranges.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              className="chip"
+              aria-pressed={range === r.key}
+              onClick={() => setRange(r.key)}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="card">
+          <div className="empty">
+            <BarChart3 className="ico" />
+            <div className="empty__title">Memuat laporan…</div>
           </div>
         </div>
-
-        <div className="grid gap-4 content-start">
-          <div className="card">
-            <div className="card__head">
-              <h2 className="card__title"><FileText className="ico" />Status Akhir</h2>
+      ) : tab === 'overview' ? (
+        <>
+          <section className="rpt__kpis">
+            <div className="rpt__kpi rpt__kpi--dark">
+              <div className="rpt__kpi-label">
+                <ClipboardList className="ico" /> Total kunjungan
+              </div>
+              <div className="rpt__kpi-value">{total}</div>
+              <div className="rpt__kpi-foot">{rangeInfo.label} terakhir</div>
             </div>
-            {Object.keys(statusCounts).length === 0 ? (
-              <div className="empty" style={{ padding: '20px 8px' }}><div className="empty__text">Belum ada data.</div></div>
-            ) : (
-              <div className="grid gap-3">
-                {Object.entries(statusCounts).map(([status, count]) => {
-                  const info = statusMap[status] ?? { label: status.replace('_', ' '), color: 'var(--faint)' };
-                  const pct = filtered.length ? Math.round((count / filtered.length) * 100) : 0;
-                  return (
-                    <div key={status} className="grid gap-1.5">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2">
+
+            <div className="rpt__kpi rpt__kpi--accent">
+              <div className="rpt__kpi-label">
+                <Users className="ico" /> Siswa dilayani
+              </div>
+              <div className="rpt__kpi-value">{uniqueStudents}</div>
+              <div className="rpt__kpi-foot">siswa berbeda</div>
+            </div>
+
+            <div className="rpt__kpi">
+              <div className="rpt__kpi-label">
+                <CalendarDays className="ico" /> Rata-rata / hari
+              </div>
+              <div className="rpt__kpi-value">{avgPerDay}</div>
+              <div className="rpt__kpi-foot">{activeDays} hari ada kunjungan</div>
+            </div>
+
+            <div className="rpt__kpi">
+              <div className="rpt__kpi-label">
+                <CheckCircle2 className="ico" /> Kembali ke kelas
+              </div>
+              <div className="rpt__kpi-value">{returnRate}%</div>
+              <div className="rpt__kpi-foot">{returned} dari {total} kunjungan</div>
+            </div>
+          </section>
+
+          <div className="rpt__grid rpt__grid--main">
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">
+                  <BarChart3 className="ico" /> Kunjungan per Bulan
+                </h2>
+                <span className="rpt__datepill">{rangeInfo.label}</span>
+              </div>
+              <AreaChart data={monthly} id="rpt-area-overview" />
+            </div>
+
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">
+                  <CheckCircle2 className="ico" /> Status Akhir
+                </h2>
+                <span className="spill spill--teal">
+                  <i /> {total} kunjungan
+                </span>
+              </div>
+
+              <Gauge pct={returnRate} />
+
+              <div className="rpt__status">
+                {Object.entries(statusCounts).length === 0 ? (
+                  <div className="empty" style={{ padding: '12px 4px' }}>
+                    <div className="empty__text">Belum ada data status.</div>
+                  </div>
+                ) : (
+                  Object.entries(statusCounts).map(([status, count]) => {
+                    const info = statusMap[status] ?? {
+                      label: status === 'unknown' ? 'Belum diisi' : status.replaceAll('_', ' '),
+                      color: 'var(--faint)',
+                    };
+                    const pct = total ? Math.round((count / total) * 100) : 0;
+                    return (
+                      <div key={status} className="rpt__statusrow">
+                        <span className="rpt__statuslabel">
                           <span className="dot" style={{ background: info.color }} />
                           {info.label}
                         </span>
-                        <span className="font-semibold">{count} <span className="muted">· {pct}%</span></span>
+                        <span className="rpt__statusval">
+                          {count} <small>· {pct}%</small>
+                        </span>
                       </div>
-                      <span className="meter">
-                        <span className="meter__fill" style={{ width: `${pct}%`, background: info.color }} />
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
-            )}
+            </div>
+          </div>
+
+          <div className="rpt__grid rpt__grid--split">
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">
+                  <Users className="ico" /> Kunjungan per Kelas
+                </h2>
+              </div>
+              {byClass.length === 0 ? (
+                <div className="empty">
+                  <div className="empty__text">Belum ada data kelas pada periode ini.</div>
+                </div>
+              ) : (
+                <BarsChart data={byClass} />
+              )}
+            </div>
+
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">
+                  <Stethoscope className="ico" /> Keluhan Terbanyak
+                </h2>
+                <span className="spill spill--iris">
+                  <i /> {complaints.length} teratas
+                </span>
+              </div>
+
+              {complaints.length === 0 ? (
+                <div className="empty">
+                  <div className="empty__text">Belum ada data keluhan pada periode ini.</div>
+                </div>
+              ) : (
+                <div className="rpt__lead">
+                  {complaints.map((c, i) => (
+                    <div key={c.key} className="rpt__lrow">
+                      <span className="rpt__lrank">{i + 1}</span>
+                      <span className="rpt__ltext">
+                        <b>{c.label}</b>
+                        <small>{c.value} kunjungan</small>
+                      </span>
+                      <span className="rpt__lbar">
+                        <span
+                          className="rpt__lfill"
+                          style={{ width: `${(c.value / maxComplaint) * 100}%` }}
+                        />
+                      </span>
+                      <span className="rpt__lval">{c.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="card">
             <div className="card__head">
-              <h2 className="card__title"><Search className="ico" />Filter</h2>
-            </div>
-            <div className="grid gap-3">
-              <div className="search w-full">
-                <Search className="ico" />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama siswa atau NIS…" aria-label="Cari" />
+              <h2 className="card__title">
+                <Users className="ico" /> Siswa Paling Sering Berkunjung
+              </h2>
+              <div className="card__tools">
+                <div className="search" style={{ height: 34, minWidth: 220 }}>
+                  <Users className="ico" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Cari nama atau NIS…"
+                    aria-label="Cari siswa dalam laporan"
+                  />
+                </div>
+                <span className="spill spill--iris">
+                  <i /> {topStudents.length} siswa
+                </span>
               </div>
-              <button type="button" className="btn btn--ghost w-full" onClick={load}>
-                <RefreshCw className="ico" /> Segarkan data
-              </button>
+            </div>
+
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Siswa</th>
+                    <th>Kelas</th>
+                    <th className="r">Kunjungan</th>
+                    <th>Relatif</th>
+                    <th className="r">Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan={6}>
+                        <div className="empty">
+                          <Users className="ico" />
+                          <div className="empty__title">Belum ada data</div>
+                          <div className="empty__text">
+                            {query ? 'Tidak ada siswa yang cocok dengan pencarian.' : 'Tidak ada kunjungan pada periode ini.'}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    topStudents.map((s, i) => {
+                      const share = total ? (s.count / total) * 100 : 0;
+                      return (
+                        <tr key={s.id}>
+                          <td className="muted">{i + 1}</td>
+                          <td>
+                            <b>{s.name}</b>
+                            <div className="muted text-xs">NIS {s.nis}</div>
+                          </td>
+                          <td className="muted">{s.klass}</td>
+                          <td className="r">{s.count}</td>
+                          <td style={{ minWidth: 180 }}>
+                            <span className="rpt__strack">
+                              <span
+                                className="rpt__sfill"
+                                style={{ width: `${(s.count / maxStudentVisits) * 100}%` }}
+                              />
+                            </span>
+                          </td>
+                          <td className="r muted">{share.toFixed(1)}%</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="rpt__builder">
+          <aside className="rpt__panel">
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">
+                  <BarChart3 className="ico" /> Build a Report
+                </h2>
+              </div>
+
+              <div className="rpt__plabel">Metric</div>
+              <div className="rpt__metrics">
+                {metrics.map((m) => {
+                  const Icon = m.icon;
+                  const active = metric === m.key;
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      className={active ? 'rpt__metric is-active' : 'rpt__metric'}
+                      aria-pressed={active}
+                      onClick={() => setMetric(m.key)}
+                    >
+                      <span className="rpt__mico">
+                        <Icon className="ico" strokeWidth={1.7} />
+                      </span>
+                      <span className="rpt__mtext">
+                        <b>{m.label}</b>
+                        <small>{m.desc}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="rpt__plabel">Group by</div>
+              <div className="rpt__seg">
+                {groupOptions.map((g) => (
+                  <button
+                    key={g.key}
+                    type="button"
+                    className={groupBy === g.key ? 'is-active' : ''}
+                    aria-pressed={groupBy === g.key}
+                    onClick={() => setGroupBy(g.key)}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="rpt__plabel">Chart</div>
+              <div className="rpt__seg">
+                <button
+                  type="button"
+                  className={chart === 'area' ? 'is-active' : ''}
+                  aria-pressed={chart === 'area'}
+                  onClick={() => setChart('area')}
+                >
+                  Area
+                </button>
+                <button
+                  type="button"
+                  className={chart === 'bars' ? 'is-active' : ''}
+                  aria-pressed={chart === 'bars'}
+                  onClick={() => setChart('bars')}
+                >
+                  Bars
+                </button>
+              </div>
+
+              <div className="rpt__pactions">
+                <button type="button" className="btn btn--primary btn--sm" onClick={saveReport}>
+                  <Star className="ico" /> Simpan
+                </button>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={exportBuilderCSV}>
+                  <Download className="ico" /> CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">
+                  <Star className="ico" /> Laporan Tersimpan
+                </h2>
+                <span className="badge badge--plain">{saved.length}</span>
+              </div>
+
+              {saved.length === 0 ? (
+                <div className="empty" style={{ padding: '18px 6px' }}>
+                  <div className="empty__text">Belum ada laporan tersimpan. Atur metrik lalu klik Simpan.</div>
+                </div>
+              ) : (
+                <div className="rpt__saved">
+                  {saved.map((s) => {
+                    const info = metrics.find((m) => m.key === s.metric) ?? metrics[0];
+                    return (
+                      <div key={s.id} className="rpt__sitem">
+                        <button type="button" className="rpt__sload" onClick={() => applyReport(s)}>
+                          <span className="rpt__mico">
+                            <info.icon className="ico" strokeWidth={1.7} />
+                          </span>
+                          <span className="rpt__mtext">
+                            <b>{s.name}</b>
+                            <small>
+                              {info.label} · {groupOptions.find((g) => g.key === s.groupBy)?.label} ·{' '}
+                              {new Date(s.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                            </small>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="ibtn"
+                          onClick={() => deleteReport(s.id)}
+                          aria-label={`Hapus ${s.name}`}
+                          title="Hapus laporan"
+                          style={{ color: 'var(--bad)', width: 30, height: 30 }}
+                        >
+                          <Trash2 className="ico" strokeWidth={1.7} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </aside>
+
+          <div className="rpt__canvas">
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">
+                  <BarChart3 className="ico" /> {metricInfo.label} per {groupInfo.label}
+                </h2>
+                <span className="rpt__datepill">
+                  <CalendarDays className="ico" /> {rangeInfo.label}
+                </span>
+              </div>
+
+              <div className="rpt__mini">
+                <div>
+                  <small>Total</small>
+                  <b>{builderTotal}</b>
+                </div>
+                <div>
+                  <small>Tertinggi</small>
+                  <b>{highest?.value ?? 0}</b>
+                  <span>{highest?.label ?? '-'}</span>
+                </div>
+                <div>
+                  <small>Terendah</small>
+                  <b>{lowest?.value ?? 0}</b>
+                  <span>{lowest?.label ?? '-'}</span>
+                </div>
+              </div>
+
+              {builderGroups.length === 0 ? (
+                <div className="empty">
+                  <BarChart3 className="ico" />
+                  <div className="empty__title">Belum ada data</div>
+                  <div className="empty__text">Tidak ada kunjungan pada periode ini.</div>
+                </div>
+              ) : chart === 'area' ? (
+                <AreaChart data={builderGroups} id="rpt-area-builder" />
+              ) : (
+                <BarsChart data={builderGroups} />
+              )}
+
+              {builderGroups.length > 0 && (
+                <div className="table-wrap" style={{ marginTop: 18 }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>{groupInfo.label}</th>
+                        <th className="r">{metricInfo.label}</th>
+                        <th>Relatif</th>
+                        <th className="r">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {builderGroups.map((g, i) => (
+                        <tr key={g.key}>
+                          <td className="muted">{i + 1}</td>
+                          <td>
+                            <b>{g.label}</b>
+                          </td>
+                          <td className="r">{g.value}</td>
+                          <td style={{ minWidth: 200 }}>
+                            <span className="rpt__strack">
+                              <span className="rpt__sfill" style={{ width: `${(g.value / builderMax) * 100}%` }} />
+                            </span>
+                          </td>
+                          <td className="r muted">
+                            {builderTotal ? ((g.value / builderTotal) * 100).toFixed(1) : '0.0'}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="rpt__hint">
+                <ArrowUpRight className="ico" />
+                <span>
+                  Data mengikuti periode <b>{rangeInfo.label}</b>. Atur metrik dan pengelompokan di panel kiri.
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="card">
-        <div className="card__head">
-          <h2 className="card__title"><ClipboardList className="ico" />Tabel Kunjungan</h2>
-          <span className="spill spill--iris"><i />{filtered.length} baris</span>
-        </div>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Waktu</th>
-                <th>Siswa</th>
-                <th>Kelas</th>
-                <th>Keluhan</th>
-                <th>Tindakan</th>
-                <th className="r">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={6}>
-                    <div className="empty"><div className="empty__title">Memuat…</div></div>
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6}>
-                    <div className="empty">
-                      <ClipboardList className="ico" />
-                      <div className="empty__title">Tidak ada data</div>
-                      <div className="empty__text">Tidak ada kunjungan pada periode ini.</div>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((v) => {
-                  const st = statusMap[v.final_status] ?? { label: '-', cls: 'badge badge--plain' };
-                  return (
-                    <tr key={v.id}>
-                      <td className="muted whitespace-nowrap">
-                        {new Date(v.check_in_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
-                      </td>
-                      <td><b>{v.students?.full_name ?? '-'}</b><div className="muted text-xs">{v.students?.nis}</div></td>
-                      <td className="muted">{v.students?.class ?? '-'}</td>
-                      <td className="muted" style={{ maxWidth: 220 }}>{v.chief_complaint ?? '-'}</td>
-                      <td className="muted" style={{ maxWidth: 220 }}>{v.treatment ?? '-'}</td>
-                      <td className="r"><span className={st.cls}>{st.label}</span></td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
     </AppShell>
   );
 }

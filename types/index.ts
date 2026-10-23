@@ -1,5 +1,19 @@
+export type Role = 'super_admin' | 'school_admin' | 'staff';
+
+export type School = {
+  id: string;
+  name: string;
+  slug: string | null;
+  address: string | null;
+  phone: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Student = {
   id: string;
+  school_id: string;
   nis: string;
   full_name: string;
   class: string | null;
@@ -11,6 +25,7 @@ export type Student = {
 
 export type Visit = {
   id: string;
+  school_id: string;
   student_id: string;
   staff_id: string;
   check_in_at: string;
@@ -29,6 +44,7 @@ export type Visit = {
 
 export type Medicine = {
   id: string;
+  school_id: string;
   name: string;
   category: string | null;
   unit: 'strip' | 'botol' | 'pcs';
@@ -41,8 +57,10 @@ export type Medicine = {
 
 export type Profile = {
   id: string;
+  email: string | null;
   full_name: string | null;
-  role: 'admin' | 'staff';
+  role: Role;
+  school_id: string | null;
   school: string | null;
   created_at: string;
 };

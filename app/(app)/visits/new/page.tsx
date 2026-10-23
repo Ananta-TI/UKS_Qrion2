@@ -110,11 +110,6 @@ function VisitForm() {
       return;
     }
 
-    await supabase.from('profiles').upsert(
-      { id: user.id, full_name: user.email, role: 'staff' },
-      { onConflict: 'id', ignoreDuplicates: true }
-    );
-
     const { data: visit, error } = await supabase
       .from('visits')
       .insert({

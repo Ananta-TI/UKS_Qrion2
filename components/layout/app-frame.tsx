@@ -148,12 +148,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
             </button>
             <span className="dock__sep" aria-hidden="true" />
             <Link
-              href="/reports"
+              href="/support"
               className="dock__btn"
               aria-label="Bantuan"
-              aria-current={pathname.startsWith('/reports') ? 'page' : undefined}
+              aria-current={pathname.startsWith('/support') ? 'page' : undefined}
             >
-              {pathname.startsWith('/reports') && (
+              {pathname.startsWith('/support') && (
                 <motion.span layoutId="dock-pill" className="dock__pill" transition={pillSpring} initial={false} />
               )}
               <LifeBuoy className="ico" strokeWidth={1.7} />
