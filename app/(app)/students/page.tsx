@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
+import { useToast } from '@/components/ui/toast';
 import {
   Search,
   AlertCircle,
@@ -55,6 +56,7 @@ function StudentsPageInner() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,6 @@ function StudentsPageInner() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -154,7 +155,9 @@ function StudentsPageInner() {
 
     if (error) {
       const duplicate = error.message.includes('duplicate key') || error.message.includes('students_school_nis_key');
-      setFormError(duplicate ? 'NIS sudah digunakan oleh siswa lain di sekolah ini.' : error.message);
+      const msg = duplicate ? 'NIS sudah digunakan oleh siswa lain di sekolah ini.' : error.message;
+      setFormError(msg);
+      toast.error(msg, isEdit ? 'Gagal Memperbarui Siswa' : 'Gagal Menambah Siswa');
       return;
     }
 
@@ -167,7 +170,7 @@ function StudentsPageInner() {
     });
 
     setOpen(false);
-    setNotice(isEdit ? `Data ${fullName} diperbarui.` : `Siswa ${fullName} ditambahkan.`);
+    toast.success(isEdit ? `Data ${fullName} berhasil diperbarui.` : `Siswa ${fullName} berhasil ditambahkan.`);
     setReloadKey((k) => k + 1);
   }
 
@@ -182,7 +185,7 @@ function StudentsPageInner() {
     setDeletingId(null);
 
     if (error) {
-      setNotice(`Gagal menghapus ${s.full_name}: ${error.message}`);
+      toast.error(`Gagal menghapus ${s.full_name}: ${error.message}`);
       return;
     }
 
@@ -194,7 +197,7 @@ function StudentsPageInner() {
       metadata: { nis: s.nis, class: s.class },
     });
 
-    setNotice(`${s.full_name} dihapus.`);
+    toast.success(`${s.full_name} berhasil dihapus.`, 'Siswa Dihapus');
     setReloadKey((k) => k + 1);
   }
 
@@ -233,23 +236,8 @@ function StudentsPageInner() {
         )}
       </div>
 
-      {notice && (
-        <div className="note note--ok" style={{ marginBottom: 16 }}>
-          <AlertCircle className="ico" />
-          <div>{notice}</div>
-          <button
-            type="button"
-            className="help__clear"
-            style={{ marginLeft: 'auto' }}
-            onClick={() => setNotice(null)}
-            aria-label="Tutup pemberitahuan"
-          >
-            <X className="ico" />
-          </button>
-        </div>
-      )}
 
-      {!loading && students.length === 0 && (
+{!loading && students.length === 0 && (
         <div className="card">
           <div className="empty">
             <UserRound className="ico" />

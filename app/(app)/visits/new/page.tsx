@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
 import { useSearchParams } from 'next/navigation';
+import { useToast } from '@/components/ui/toast';
 import { AppShell } from '@/components/layout/app-shell';
 import {
   Search,
@@ -41,6 +42,7 @@ export default function VisitFormPage() {
 function VisitForm() {
   const supabase = createClient();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [student, setStudent] = useState<any | null>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
@@ -107,7 +109,9 @@ function VisitForm() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setSubmitting(false);
-      setError('Sesi berakhir. Silakan login ulang.');
+      const msg = 'Sesi berakhir. Silakan login ulang.';
+      setError(msg);
+      toast.error(msg, 'Sesi Berakhir');
       return;
     }
 
@@ -130,7 +134,9 @@ function VisitForm() {
 
     if (error || !visit) {
       setSubmitting(false);
-      setError(error?.message ?? 'Gagal menyimpan kunjungan.');
+      const msg = error?.message ?? 'Gagal menyimpan kunjungan.';
+      setError(msg);
+      toast.error(msg, 'Kunjungan Gagal Disimpan');
       return;
     }
 

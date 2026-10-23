@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { CountUp } from '@/components/ui/count-up';
 import { getSessionProfile } from '@/lib/auth';
 import { impersonateSchool } from './actions';
-import { Building2, Plus, LogIn, CheckCircle2, AlertCircle, KeyRound } from 'lucide-react';
+import { ImpersonateButton } from '@/components/admin/impersonate-button';
+import { Building2, Plus, CheckCircle2, AlertCircle, KeyRound } from 'lucide-react';
 
 type SchoolRow = {
   id: string;
@@ -156,12 +157,12 @@ export default async function AdminHomePage({
                             Kelola
                           </Link>
                           {account ? (
-                            <form action={impersonateSchool}>
-                              <input type="hidden" name="school_id" value={s.id} />
-                              <button type="submit" className="btn btn--soft btn--xs">
-                                <LogIn className="ico" /> Login
-                              </button>
-                            </form>
+                            <ImpersonateButton
+                              schoolId={s.id}
+                              schoolName={s.name}
+                              accountEmail={account}
+                              action={impersonateSchool}
+                            />
                           ) : (
                             <Link href={`/admin/schools/${s.id}`} className="btn btn--soft btn--xs">
                               <KeyRound className="ico" /> Atur akun

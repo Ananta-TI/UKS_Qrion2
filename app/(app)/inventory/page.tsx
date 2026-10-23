@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
+import { useToast } from '@/components/ui/toast';
 import {
   Package,
   Plus,
@@ -23,6 +24,7 @@ function InventoryPageInner() {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [medicines, setMedicines] = useState<any[]>([]);
   const [now, setNow] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -85,7 +87,10 @@ function InventoryPageInner() {
       .from('medicines')
       .update({ stock: (m?.stock ?? 0) + qty })
       .eq('id', id);
-    if (error) return;
+    if (error) {
+      toast.error(`Gagal menambah stok: ${error.message}`, 'Stok Gagal Diperbarui');
+      return;
+    }
 
     await supabase.from('medicine_logs').insert({ medicine_id: id, type: 'in', qty, notes: 'Restok' });
     await logClientActivity({
@@ -95,6 +100,7 @@ function InventoryPageInner() {
       summary: `Menambah stok ${m?.name ?? 'obat'} sebanyak ${qty}`,
       metadata: { stock_before: m?.stock ?? 0, added: qty },
     });
+    toast.success(`Stok ${m?.name ?? 'obat'} berhasil ditambah ${qty}.`, 'Stok Diperbarui');
     load();
   }
 
@@ -115,7 +121,10 @@ function InventoryPageInner() {
       .select('id')
       .single();
     setSaving(false);
-    if (error) return;
+    if (error) {
+      toast.error(`Gagal menambah obat: ${error.message}`, 'Obat Gagal Ditambahkan');
+      return;
+    }
 
     await logClientActivity({
       action: 'create',
@@ -124,6 +133,7 @@ function InventoryPageInner() {
       summary: `Menambahkan obat ${form.name}`,
       metadata: { category: form.category || null, stock: parseInt(form.stock || '0', 10) },
     });
+    toast.success(`Obat ${form.name} berhasil ditambahkan.`, 'Obat Ditambahkan');
     setOpen(false);
     setForm({ name: '', category: '', unit: 'pcs', stock: '', min_stock: '5', location: '', expiry_date: '' });
     load();
