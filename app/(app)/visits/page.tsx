@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { AppShell } from '@/components/layout/app-shell';
+import { CountUp } from '@/components/ui/count-up';
 import { Search, ClipboardList, Plus, Stethoscope } from 'lucide-react';
 import Link from 'next/link';
 
@@ -62,7 +63,7 @@ export default function VisitsPage() {
             />
           </div>
           <span className="toolbar__spacer" />
-          <span className="spill spill--iris"><i />{filtered.length} kunjungan</span>
+          <span className="spill spill--iris"><i /><CountUp value={filtered.length} /> kunjungan</span>
         </div>
 
         {loading ? (

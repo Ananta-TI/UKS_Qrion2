@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { AppShell } from '@/components/layout/app-shell';
+import { CountUp } from '@/components/ui/count-up';
 import {
   Package,
   Plus,
@@ -105,15 +106,15 @@ export default function InventoryPage() {
       <section className="kpis">
         <div className="stat stat--dark">
           <div className="stat__label"><span className="stat__ico"><Package className="ico" /></span>Jenis Obat</div>
-          <div className="stat__value">{medicines.length}</div>
+          <div className="stat__value"><CountUp value={medicines.length} /></div>
         </div>
         <div className="stat stat--accent">
           <div className="stat__label"><span className="stat__ico"><AlertTriangle className="ico" /></span>Stok Menipis</div>
-          <div className="stat__value">{lowStock}</div>
+          <div className="stat__value"><CountUp value={lowStock} /></div>
         </div>
         <div className="stat">
           <div className="stat__label"><span className="stat__ico"><Clock className="ico" /></span>Kedaluwarsa ≤ 30 hari</div>
-          <div className="stat__value">{expiring}</div>
+          <div className="stat__value"><CountUp value={expiring} /></div>
         </div>
       </section>
 

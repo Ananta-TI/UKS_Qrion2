@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { AppShell } from '@/components/layout/app-shell';
+import { CountUp } from '@/components/ui/count-up';
 import {
   Search,
   AlertCircle,
@@ -200,7 +201,7 @@ export default function StudentsPage() {
           <span className="muted text-xs">Memuat…</span>
         ) : (
           <span className="spill spill--iris">
-            <i /> {students.length} siswa
+            <i /> <CountUp value={students.length} /> siswa
           </span>
         )}
       </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { CountUp } from '@/components/ui/count-up';
 import {
   ArrowUpRight,
   BarChart3,
@@ -206,15 +207,15 @@ export function SupportCenter({
 
           <div className="help__metrics">
             <div>
-              <b>{filtered.length}</b>
+              <b><CountUp value={filtered.length} /></b>
               <small>panduan cocok</small>
             </div>
             <div>
-              <b>{categories.length}</b>
+              <b><CountUp value={categories.length} /></b>
               <small>kategori</small>
             </div>
             <div>
-              <b>{faqs.length}</b>
+              <b><CountUp value={faqs.length} /></b>
               <small>total panduan</small>
             </div>
           </div>

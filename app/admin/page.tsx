@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { CountUp } from '@/components/ui/count-up';
 import { getSessionProfile } from '@/lib/auth';
 import { impersonateSchool } from './actions';
 import { Building2, Plus, LogIn, CheckCircle2, AlertCircle, KeyRound } from 'lucide-react';
@@ -78,19 +79,19 @@ export default async function AdminHomePage({
       <section className="adm__stats">
         <div className="adm__stat">
           <small>Total Sekolah</small>
-          <b>{schools.length}</b>
+          <b><CountUp value={schools.length} /></b>
         </div>
         <div className="adm__stat">
           <small>Sekolah Aktif</small>
-          <b>{activeSchools}</b>
+          <b><CountUp value={activeSchools} /></b>
         </div>
         <div className="adm__stat">
           <small>Total Siswa</small>
-          <b>{totalStudents}</b>
+          <b><CountUp value={totalStudents} /></b>
         </div>
         <div className="adm__stat">
           <small>Total Kunjungan</small>
-          <b>{totalVisits}</b>
+          <b><CountUp value={totalVisits} /></b>
         </div>
       </section>
 
@@ -102,7 +103,7 @@ export default async function AdminHomePage({
           </h2>
           <span className="spill spill--iris">
             <i />
-            {schools.length} sekolah
+            <CountUp value={schools.length} /> sekolah
           </span>
         </div>
 
@@ -141,9 +142,9 @@ export default async function AdminHomePage({
                         <div className="muted text-xs">{s.slug ?? '-'}</div>
                       </td>
                       <td className="muted">{account ?? '-'}</td>
-                      <td className="r">{relCount(s.students)}</td>
-                      <td className="r">{relCount(s.visits)}</td>
-                      <td className="r">{relCount(s.medicines)}</td>
+                      <td className="r"><CountUp value={relCount(s.students)} /></td>
+                      <td className="r"><CountUp value={relCount(s.visits)} /></td>
+                      <td className="r"><CountUp value={relCount(s.medicines)} /></td>
                       <td>
                         <span className={s.is_active ? 'badge badge--good' : 'badge badge--plain'}>
                           {s.is_active ? 'Aktif' : 'Nonaktif'}

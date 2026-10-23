@@ -1,4 +1,5 @@
 import { AppShell } from '@/components/layout/app-shell';
+import { CountUp } from '@/components/ui/count-up';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import {
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
   if (!user) redirect('/auth/signin');
 
   const [students, visits, medicines] = await Promise.all([
-    supabase.from('students').select('count', { head: true }),
+    supabase.from('students').select('*', { count: 'exact', head: true }),
     supabase.from('visits').select('*, students(*)').gte('check_in_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
     supabase.from('medicines').select('*'),
   ]);
@@ -59,19 +60,19 @@ export default async function DashboardPage() {
       <section className="kpis" aria-label="Ringkasan">
         <div className="stat stat--dark">
           <div className="stat__label"><span className="stat__ico"><Users className="ico" /></span>Total Siswa</div>
-          <div className="stat__value">{totalStudents}</div>
+          <div className="stat__value"><CountUp value={totalStudents} /></div>
         </div>
         <div className="stat stat--accent">
           <div className="stat__label"><span className="stat__ico"><ClipboardList className="ico" /></span>Kunjungan Hari Ini</div>
-          <div className="stat__value">{todayVisits}<span className="stat__suffix">kunjungan</span></div>
+          <div className="stat__value"><CountUp value={todayVisits} /><span className="stat__suffix">kunjungan</span></div>
         </div>
         <div className="stat">
           <div className="stat__label"><span className="stat__ico"><AlertTriangle className="ico" /></span>Stok Menipis</div>
-          <div className="stat__value">{lowStock}{lowStock > 0 && <span className="badge badge--bad">Perlu restock</span>}</div>
+          <div className="stat__value"><CountUp value={lowStock} />{lowStock > 0 && <span className="badge badge--bad">Perlu restock</span>}</div>
         </div>
         <div className="stat">
           <div className="stat__label"><span className="stat__ico"><Clock className="ico" /></span>Kedaluwarsa</div>
-          <div className="stat__value">{expiringSoon}{expiringSoon > 0 && <span className="badge badge--warn">≤ 30 hari</span>}</div>
+          <div className="stat__value"><CountUp value={expiringSoon} />{expiringSoon > 0 && <span className="badge badge--warn">≤ 30 hari</span>}</div>
         </div>
       </section>
 
@@ -160,7 +161,7 @@ export default async function DashboardPage() {
             {lowStock > 0 ? (
               <div className="note note--bad">
                 <AlertTriangle className="ico" />
-                <div>Ada <b>{lowStock} obat</b> dengan stok menipis. Segera lakukan restock.</div>
+                <div>Ada <b><CountUp value={lowStock} /> obat</b> dengan stok menipis. Segera lakukan restock.</div>
               </div>
             ) : (
               <div className="note">
@@ -171,7 +172,7 @@ export default async function DashboardPage() {
             {expiringSoon > 0 && (
               <div className="note note--warn" style={{ marginTop: 10 }}>
                 <Clock className="ico" />
-                <div><b>{expiringSoon} obat</b> akan kedaluwarsa dalam 30 hari.</div>
+                <div><b><CountUp value={expiringSoon} /> obat</b> akan kedaluwarsa dalam 30 hari.</div>
               </div>
             )}
           </div>

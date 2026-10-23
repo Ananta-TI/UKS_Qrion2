@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { LayoutGroup, motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import { AppShell } from '@/components/layout/app-shell';
+import { CountUp } from '@/components/ui/count-up';
 import {
   AlertCircle,
   ArrowUpRight,
@@ -19,6 +21,8 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+
+const pillSpring = { type: 'spring', stiffness: 380, damping: 32, mass: 0.7 } as const;
 
 const ranges = [
   { key: '30d', label: '30 hari', days: 30 },
@@ -176,9 +180,16 @@ function AreaChart({ data, id }: { data: GroupDatum[]; id: string }) {
   const line = smoothPath(points);
   const area = `${line} L ${points[points.length - 1][0]} ${padTop + innerH} L ${points[0][0]} ${padTop + innerH} Z`;
   const labelEvery = Math.ceil(data.length / 12);
+  const signature = data.map((d) => `${d.key}:${d.value}`).join('|');
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="rpt__svg" role="img" aria-label="Grafik tren">
+    <svg
+      key={signature}
+      viewBox={`0 0 ${width} ${height}`}
+      className="rpt__svg"
+      role="img"
+      aria-label="Grafik tren"
+    >
       <defs>
         <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="var(--coral)" stopOpacity="0.3" />
@@ -198,11 +209,29 @@ function AreaChart({ data, id }: { data: GroupDatum[]; id: string }) {
         />
       ))}
 
-      <path d={area} fill={`url(#${id})`} />
-      <path d={line} fill="none" stroke="var(--coral)" strokeWidth="2.5" strokeLinecap="round" />
+      <path className="rpt__area" d={area} fill={`url(#${id})`} />
+      <path
+        className="rpt__line"
+        d={line}
+        pathLength={1}
+        fill="none"
+        stroke="var(--coral)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
 
       {points.map(([x, y], i) => (
-        <circle key={data[i].key} cx={x} cy={y} r="3.5" fill="var(--coral)" stroke="var(--surface)" strokeWidth="2">
+        <circle
+          key={data[i].key}
+          className="rpt__pt"
+          style={{ animationDelay: `${180 + i * 35}ms` }}
+          cx={x}
+          cy={y}
+          r="3.5"
+          fill="var(--coral)"
+          stroke="var(--surface)"
+          strokeWidth="2"
+        >
           <title>{`${data[i].label}: ${data[i].value}`}</title>
         </circle>
       ))}
@@ -220,20 +249,28 @@ function AreaChart({ data, id }: { data: GroupDatum[]; id: string }) {
 
 function BarsChart({ data }: { data: GroupDatum[] }) {
   const max = Math.max(1, ...data.map((d) => d.value));
+  const total = data.reduce((sum, d) => sum + d.value, 0);
+  const signature = data.map((d) => `${d.key}:${d.value}`).join('|');
 
   return (
-    <div className="rpt__bars">
-      {data.map((d) => (
-        <div key={d.key} className="rpt__bcol" title={`${d.label}: ${d.value}`}>
-          <span className="rpt__bval">{d.value}</span>
-          <div className="rpt__btrack">
+    <div key={signature} className="rpt__bars">
+      {data.map((d, i) => (
+        <div key={d.key} className="rpt__brow" title={`${d.label}: ${d.value}`}>
+          <span className="rpt__blabel">{d.label}</span>
+          <span className="rpt__btrack">
             <span
               className="rpt__bfill"
-              style={{ height: `${Math.max((d.value / max) * 100, 2)}%` }}
+              style={{
+                width: `${Math.max((d.value / max) * 100, 1)}%`,
+                animationDelay: `${i * 55}ms`,
+              }}
             />
-          </div>
-          <span className="rpt__blabel" title={d.label}>
-            {d.label.length > 9 ? d.label.slice(0, 8) + '…' : d.label}
+          </span>
+          <span className="rpt__bval">
+            <CountUp value={d.value} />
+            <small>
+              <CountUp value={total ? (d.value / total) * 100 : 0} decimals={0} suffix="%" />
+            </small>
           </span>
         </div>
       ))}
@@ -245,27 +282,29 @@ function Gauge({ pct }: { pct: number }) {
   const r = 64;
   const cx = 90;
   const cy = 92;
-  const circ = Math.PI * r;
   const d = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
 
   return (
-    <svg viewBox="0 0 180 112" className="rpt__gauge" role="img" aria-label={`${pct}% kembali ke kelas`}>
-      <path d={d} fill="none" stroke="var(--well)" strokeWidth="14" strokeLinecap="round" />
-      <path
-        d={d}
-        fill="none"
-        stroke="var(--good)"
-        strokeWidth="14"
-        strokeLinecap="round"
-        strokeDasharray={`${(Math.min(pct, 100) / 100) * circ} ${circ}`}
-      />
-      <text x={cx} y={cy - 12} textAnchor="middle" className="rpt__gaugeval">
-        {pct}%
-      </text>
-      <text x={cx} y={cy + 6} textAnchor="middle" className="rpt__gaugelab">
-        kembali ke kelas
-      </text>
-    </svg>
+    <div className="rpt__gaugewrap">
+      <svg viewBox="0 0 180 112" className="rpt__gauge" role="img" aria-label={`${pct}% kembali ke kelas`}>
+        <path d={d} fill="none" stroke="var(--well)" strokeWidth="14" strokeLinecap="round" />
+        <motion.path
+          key={pct}
+          d={d}
+          fill="none"
+          stroke="var(--good)"
+          strokeWidth="14"
+          strokeLinecap="round"
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: Math.min(pct, 100) / 100 }}
+          transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+        />
+      </svg>
+      <div className="rpt__gaugeoverlay" aria-hidden="true">
+        <CountUp className="rpt__gaugeval" value={pct} suffix="%" />
+        <span>kembali ke kelas</span>
+      </div>
+    </div>
   );
 }
 
@@ -335,7 +374,7 @@ export default function ReportsPage() {
   const returnRate = total ? Math.round((returned / total) * 100) : 0;
 
   const activeDays = new Set(filtered.map((v) => v.check_in_at.slice(0, 10))).size;
-  const avgPerDay = activeDays ? (total / activeDays).toFixed(1) : '0';
+  const avgPerDay = activeDays ? total / activeDays : 0;
 
   const monthly = buildGroups(filtered, 'month', 'visits');
   const byClass = buildGroups(filtered, 'class', 'visits').slice(0, 8);
@@ -358,10 +397,12 @@ export default function ReportsPage() {
   });
   const topStudents = [...studentMap.values()].sort((a, b) => b.count - a.count).slice(0, 10);
   const maxStudentVisits = Math.max(1, ...topStudents.map((s) => s.count));
+  const topSignature = topStudents.map((s) => `${s.id}:${s.count}`).join('|');
 
   const metricInfo = metrics.find((m) => m.key === metric) ?? metrics[0];
   const groupInfo = groupOptions.find((g) => g.key === groupBy) ?? groupOptions[0];
   const builderGroups = buildGroups(visits, groupBy, metric);
+  const builderSignature = builderGroups.map((g) => `${g.key}:${g.value}`).join('|');
   const builderTotal = builderGroups.reduce((sum, g) => sum + g.value, 0);
   const builderMax = Math.max(1, ...builderGroups.map((g) => g.value));
   const highest = builderGroups.reduce<GroupDatum | null>(
@@ -401,8 +442,13 @@ export default function ReportsPage() {
   function applyReport(item: SavedReport) {
     setMetric(item.metric);
     setGroupBy(item.groupBy);
-    setChart(item.chart);
+    setChart(item.groupBy === 'complaint' ? 'bars' : item.chart);
     setRange(item.range);
+  }
+
+  function chooseGroup(next: GroupBy) {
+    setGroupBy(next);
+    if (next === 'complaint') setChart('bars');
   }
 
   function deleteReport(id: string) {
@@ -499,40 +545,68 @@ export default function ReportsPage() {
       }
     >
       <div className="rpt__bar">
-        <div className="rpt__tabs" role="tablist" aria-label="Mode laporan">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'overview'}
-            className={tab === 'overview' ? 'rpt__tab is-active' : 'rpt__tab'}
-            onClick={() => setTab('overview')}
-          >
-            Overview
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'builder'}
-            className={tab === 'builder' ? 'rpt__tab is-active' : 'rpt__tab'}
-            onClick={() => setTab('builder')}
-          >
-            Report builder
-          </button>
-        </div>
-
-        <div className="chips">
-          {ranges.map((r) => (
+        <LayoutGroup id="rpt-tabs">
+          <div className="rpt__tabs" role="tablist" aria-label="Mode laporan">
             <button
-              key={r.key}
               type="button"
-              className="chip"
-              aria-pressed={range === r.key}
-              onClick={() => setRange(r.key)}
+              role="tab"
+              aria-selected={tab === 'overview'}
+              className={tab === 'overview' ? 'rpt__tab is-active' : 'rpt__tab'}
+              onClick={() => setTab('overview')}
             >
-              {r.label}
+              {tab === 'overview' && (
+                <motion.span
+                  layoutId="rpt-tab-pill"
+                  className="rpt__pill"
+                  transition={pillSpring}
+                  initial={false}
+                />
+              )}
+              <span className="rpt__z">Overview</span>
             </button>
-          ))}
-        </div>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'builder'}
+              className={tab === 'builder' ? 'rpt__tab is-active' : 'rpt__tab'}
+              onClick={() => setTab('builder')}
+            >
+              {tab === 'builder' && (
+                <motion.span
+                  layoutId="rpt-tab-pill"
+                  className="rpt__pill"
+                  transition={pillSpring}
+                  initial={false}
+                />
+              )}
+              <span className="rpt__z">Report builder</span>
+            </button>
+          </div>
+        </LayoutGroup>
+
+        <LayoutGroup id="rpt-range">
+          <div className="chips rpt__ranges">
+            {ranges.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                className="chip rpt__range"
+                aria-pressed={range === r.key}
+                onClick={() => setRange(r.key)}
+              >
+                {range === r.key && (
+                  <motion.span
+                    layoutId="rpt-range-pill"
+                    className="rpt__chippill"
+                    transition={pillSpring}
+                    initial={false}
+                  />
+                )}
+                <span className="rpt__z">{r.label}</span>
+              </button>
+            ))}
+          </div>
+        </LayoutGroup>
       </div>
 
       {loading ? (
@@ -549,7 +623,7 @@ export default function ReportsPage() {
               <div className="rpt__kpi-label">
                 <ClipboardList className="ico" /> Total kunjungan
               </div>
-              <div className="rpt__kpi-value">{total}</div>
+              <div className="rpt__kpi-value"><CountUp value={total} /></div>
               <div className="rpt__kpi-foot">{rangeInfo.label} terakhir</div>
             </div>
 
@@ -557,7 +631,7 @@ export default function ReportsPage() {
               <div className="rpt__kpi-label">
                 <Users className="ico" /> Siswa dilayani
               </div>
-              <div className="rpt__kpi-value">{uniqueStudents}</div>
+              <div className="rpt__kpi-value"><CountUp value={uniqueStudents} /></div>
               <div className="rpt__kpi-foot">siswa berbeda</div>
             </div>
 
@@ -565,16 +639,16 @@ export default function ReportsPage() {
               <div className="rpt__kpi-label">
                 <CalendarDays className="ico" /> Rata-rata / hari
               </div>
-              <div className="rpt__kpi-value">{avgPerDay}</div>
-              <div className="rpt__kpi-foot">{activeDays} hari ada kunjungan</div>
+              <div className="rpt__kpi-value"><CountUp value={avgPerDay} decimals={1} /></div>
+              <div className="rpt__kpi-foot"><CountUp value={activeDays} /> hari ada kunjungan</div>
             </div>
 
             <div className="rpt__kpi">
               <div className="rpt__kpi-label">
                 <CheckCircle2 className="ico" /> Kembali ke kelas
               </div>
-              <div className="rpt__kpi-value">{returnRate}%</div>
-              <div className="rpt__kpi-foot">{returned} dari {total} kunjungan</div>
+              <div className="rpt__kpi-value"><CountUp value={returnRate} suffix="%" /></div>
+              <div className="rpt__kpi-foot"><CountUp value={returned} /> dari <CountUp value={total} /> kunjungan</div>
             </div>
           </section>
 
@@ -595,7 +669,7 @@ export default function ReportsPage() {
                   <CheckCircle2 className="ico" /> Status Akhir
                 </h2>
                 <span className="spill spill--teal">
-                  <i /> {total} kunjungan
+                  <i /> <CountUp value={total} /> kunjungan
                 </span>
               </div>
 
@@ -620,7 +694,7 @@ export default function ReportsPage() {
                           {info.label}
                         </span>
                         <span className="rpt__statusval">
-                          {count} <small>· {pct}%</small>
+                          <CountUp value={count} /> <small>· <CountUp value={pct} suffix="%" /></small>
                         </span>
                       </div>
                     );
@@ -652,7 +726,7 @@ export default function ReportsPage() {
                   <Stethoscope className="ico" /> Keluhan Terbanyak
                 </h2>
                 <span className="spill spill--iris">
-                  <i /> {complaints.length} teratas
+                  <i /> <CountUp value={complaints.length} /> teratas
                 </span>
               </div>
 
@@ -667,15 +741,18 @@ export default function ReportsPage() {
                       <span className="rpt__lrank">{i + 1}</span>
                       <span className="rpt__ltext">
                         <b>{c.label}</b>
-                        <small>{c.value} kunjungan</small>
+                        <small><CountUp value={c.value} /> kunjungan</small>
                       </span>
                       <span className="rpt__lbar">
                         <span
                           className="rpt__lfill"
-                          style={{ width: `${(c.value / maxComplaint) * 100}%` }}
+                          style={{
+                            width: `${(c.value / maxComplaint) * 100}%`,
+                            animationDelay: `${i * 55}ms`,
+                          }}
                         />
                       </span>
-                      <span className="rpt__lval">{c.value}</span>
+                      <span className="rpt__lval"><CountUp value={c.value} /></span>
                     </div>
                   ))}
                 </div>
@@ -699,7 +776,7 @@ export default function ReportsPage() {
                   />
                 </div>
                 <span className="spill spill--iris">
-                  <i /> {topStudents.length} siswa
+                  <i /> <CountUp value={topStudents.length} /> siswa
                 </span>
               </div>
             </div>
@@ -716,7 +793,7 @@ export default function ReportsPage() {
                     <th className="r">Share</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody key={topSignature}>
                   {topStudents.length === 0 ? (
                     <tr>
                       <td colSpan={6}>
@@ -740,16 +817,19 @@ export default function ReportsPage() {
                             <div className="muted text-xs">NIS {s.nis}</div>
                           </td>
                           <td className="muted">{s.klass}</td>
-                          <td className="r">{s.count}</td>
+                          <td className="r"><CountUp value={s.count} /></td>
                           <td style={{ minWidth: 180 }}>
                             <span className="rpt__strack">
                               <span
                                 className="rpt__sfill"
-                                style={{ width: `${(s.count / maxStudentVisits) * 100}%` }}
+                                style={{
+                                  width: `${(s.count / maxStudentVisits) * 100}%`,
+                                  animationDelay: `${i * 40}ms`,
+                                }}
                               />
                             </span>
                           </td>
-                          <td className="r muted">{share.toFixed(1)}%</td>
+                          <td className="r muted"><CountUp value={share} decimals={1} suffix="%" /></td>
                         </tr>
                       );
                     })
@@ -795,39 +875,72 @@ export default function ReportsPage() {
               </div>
 
               <div className="rpt__plabel">Group by</div>
-              <div className="rpt__seg">
-                {groupOptions.map((g) => (
-                  <button
-                    key={g.key}
-                    type="button"
-                    className={groupBy === g.key ? 'is-active' : ''}
-                    aria-pressed={groupBy === g.key}
-                    onClick={() => setGroupBy(g.key)}
-                  >
-                    {g.label}
-                  </button>
-                ))}
-              </div>
+              <LayoutGroup id="rpt-group">
+                <div className="rpt__seg">
+                  {groupOptions.map((g) => (
+                    <button
+                      key={g.key}
+                      type="button"
+                      className={groupBy === g.key ? 'is-active' : ''}
+                      aria-pressed={groupBy === g.key}
+                      onClick={() => chooseGroup(g.key)}
+                    >
+                      {groupBy === g.key && (
+                        <motion.span
+                          layoutId="rpt-group-pill"
+                          className="rpt__segpill"
+                          transition={pillSpring}
+                          initial={false}
+                        />
+                      )}
+                      <span className="rpt__z">{g.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </LayoutGroup>
 
               <div className="rpt__plabel">Chart</div>
-              <div className="rpt__seg">
-                <button
-                  type="button"
-                  className={chart === 'area' ? 'is-active' : ''}
-                  aria-pressed={chart === 'area'}
-                  onClick={() => setChart('area')}
-                >
-                  Area
-                </button>
-                <button
-                  type="button"
-                  className={chart === 'bars' ? 'is-active' : ''}
-                  aria-pressed={chart === 'bars'}
-                  onClick={() => setChart('bars')}
-                >
-                  Bars
-                </button>
-              </div>
+              <LayoutGroup id="rpt-chart">
+                <div className="rpt__seg">
+                  <button
+                    type="button"
+                    className={chart === 'area' ? 'is-active' : ''}
+                    aria-pressed={chart === 'area'}
+                    disabled={groupBy === 'complaint'}
+                    title={groupBy === 'complaint' ? 'Area tidak cocok untuk data keluhan. Gunakan Bars.' : undefined}
+                    onClick={() => setChart('area')}
+                  >
+                    {chart === 'area' && groupBy !== 'complaint' && (
+                      <motion.span
+                        layoutId="rpt-chart-pill"
+                        className="rpt__segpill"
+                        transition={pillSpring}
+                        initial={false}
+                      />
+                    )}
+                    <span className="rpt__z">Area</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={chart === 'bars' ? 'is-active' : ''}
+                    aria-pressed={chart === 'bars'}
+                    onClick={() => setChart('bars')}
+                  >
+                    {chart === 'bars' && (
+                      <motion.span
+                        layoutId="rpt-chart-pill"
+                        className="rpt__segpill"
+                        transition={pillSpring}
+                        initial={false}
+                      />
+                    )}
+                    <span className="rpt__z">Bars</span>
+                  </button>
+                </div>
+              </LayoutGroup>
+              {groupBy === 'complaint' && (
+                <div className="rpt__tiny">Area dinonaktifkan untuk keluhan — otomatis memakai Bars.</div>
+              )}
 
               <div className="rpt__pactions">
                 <button type="button" className="btn btn--primary btn--sm" onClick={saveReport}>
@@ -844,7 +957,7 @@ export default function ReportsPage() {
                 <h2 className="card__title">
                   <Star className="ico" /> Laporan Tersimpan
                 </h2>
-                <span className="badge badge--plain">{saved.length}</span>
+                <span className="badge badge--plain"><CountUp value={saved.length} /></span>
               </div>
 
               {saved.length === 0 ? (
@@ -901,16 +1014,16 @@ export default function ReportsPage() {
               <div className="rpt__mini">
                 <div>
                   <small>Total</small>
-                  <b>{builderTotal}</b>
+                  <b><CountUp value={builderTotal} /></b>
                 </div>
                 <div>
                   <small>Tertinggi</small>
-                  <b>{highest?.value ?? 0}</b>
+                  <b><CountUp value={highest?.value ?? 0} /></b>
                   <span>{highest?.label ?? '-'}</span>
                 </div>
                 <div>
                   <small>Terendah</small>
-                  <b>{lowest?.value ?? 0}</b>
+                  <b><CountUp value={lowest?.value ?? 0} /></b>
                   <span>{lowest?.label ?? '-'}</span>
                 </div>
               </div>
@@ -939,21 +1052,31 @@ export default function ReportsPage() {
                         <th className="r">Share</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody key={builderSignature}>
                       {builderGroups.map((g, i) => (
                         <tr key={g.key}>
                           <td className="muted">{i + 1}</td>
                           <td>
                             <b>{g.label}</b>
                           </td>
-                          <td className="r">{g.value}</td>
+                          <td className="r"><CountUp value={g.value} /></td>
                           <td style={{ minWidth: 200 }}>
                             <span className="rpt__strack">
-                              <span className="rpt__sfill" style={{ width: `${(g.value / builderMax) * 100}%` }} />
+                              <span
+                                className="rpt__sfill"
+                                style={{
+                                  width: `${(g.value / builderMax) * 100}%`,
+                                  animationDelay: `${i * 40}ms`,
+                                }}
+                              />
                             </span>
                           </td>
                           <td className="r muted">
-                            {builderTotal ? ((g.value / builderTotal) * 100).toFixed(1) : '0.0'}%
+                            <CountUp
+                              value={builderTotal ? (g.value / builderTotal) * 100 : 0}
+                              decimals={1}
+                              suffix="%"
+                            />
                           </td>
                         </tr>
                       ))}
