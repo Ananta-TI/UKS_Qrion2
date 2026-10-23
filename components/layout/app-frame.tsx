@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { CommandPalette } from '@/components/layout/command-palette';
+import { SettingsRail } from '@/components/layout/settings-rail';
 import {
   LayoutDashboard,
   Users,
@@ -18,6 +19,9 @@ import {
   Search,
   Plus,
   LifeBuoy,
+  Settings,
+  UserRound,
+  Pill,
 } from 'lucide-react';
 
 const pillSpring = { type: 'spring', stiffness: 380, damping: 32, mass: 0.7 } as const;
@@ -28,6 +32,12 @@ const tabs = [
   { href: '/visits', label: 'Kunjungan', icon: Stethoscope },
   { href: '/inventory', label: 'Inventaris', icon: Package },
   { href: '/reports', label: 'Laporan', icon: BarChart3 },
+];
+
+const addItems = [
+  { href: '/visits/new', label: 'Catat Kunjungan', desc: 'Rekam medis harian', icon: Stethoscope },
+  { href: '/students?add=1', label: 'Tambah Siswa', desc: 'Daftarkan siswa baru', icon: UserRound },
+  { href: '/inventory?add=1', label: 'Tambah Obat', desc: 'Stok inventaris UKS', icon: Pill },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -44,9 +54,12 @@ function toggleTheme() {
   } catch {}
 }
 
+
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const addRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -59,6 +72,29 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAddOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!addOpen) return;
+
+    const onPointer = (e: PointerEvent) => {
+      if (addRef.current && !addRef.current.contains(e.target as Node)) setAddOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAddOpen(false);
+    };
+
+    document.addEventListener('pointerdown', onPointer);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [addOpen]);
+
   return (
     <>
       <div className="mesh" aria-hidden="true">
@@ -67,7 +103,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         <i className="mesh__c" />
       </div>
 
-      <div className="app">
+      <div className={pathname.startsWith('/settings') ? 'app app--settings' : 'app'}>
         <header className="top">
           <Link className="brand" href="/" aria-label="UKS — Dashboard">
             <span className="brand__mark" aria-hidden="true">
@@ -119,6 +155,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        {pathname.startsWith('/settings') && <SettingsRail />}
+
         <LayoutGroup id="dock">
           <nav className="dock" aria-label="Aksi cepat">
             <button
@@ -130,18 +168,54 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               <Search className="ico" strokeWidth={1.7} />
               <span className="dock__tip">Cari · Ctrl K</span>
             </button>
-            <Link
-              href="/visits/new"
-              className="dock__btn"
-              aria-label="Catat kunjungan"
-              aria-current={pathname === '/visits/new' ? 'page' : undefined}
-            >
-              {pathname === '/visits/new' && (
-                <motion.span layoutId="dock-pill" className="dock__pill" transition={pillSpring} initial={false} />
-              )}
-              <Plus className="ico" strokeWidth={1.7} />
-              <span className="dock__tip">Catat kunjungan</span>
-            </Link>
+            <div className="dock__add" ref={addRef}>
+              <button
+                type="button"
+                className={addOpen ? 'dock__btn is-open' : 'dock__btn'}
+                onClick={() => setAddOpen((v) => !v)}
+                aria-label="Tambah data"
+                aria-haspopup="menu"
+                aria-expanded={addOpen}
+              >
+                <Plus className="ico" strokeWidth={1.7} />
+                <span className="dock__tip">Tambah data</span>
+              </button>
+
+              <AnimatePresence>
+                {addOpen && (
+                  <motion.div
+                    className="addmenu"
+                    role="menu"
+                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
+                    transition={{ duration: 0.16, ease: 'easeOut' }}
+                  >
+                    <div className="addmenu__head">Tambah baru</div>
+                    {addItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          role="menuitem"
+                          className="addmenu__item"
+                          onClick={() => setAddOpen(false)}
+                        >
+                          <span className="addmenu__ico">
+                            <Icon className="ico" strokeWidth={1.7} />
+                          </span>
+                          <span className="addmenu__text">
+                            <b>{item.label}</b>
+                            <small>{item.desc}</small>
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <button type="button" className="dock__btn" onClick={toggleTheme} aria-label="Ganti tema">
               <SunMoon className="ico" strokeWidth={1.7} />
               <span className="dock__tip">Tema</span>
@@ -158,6 +232,18 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               )}
               <LifeBuoy className="ico" strokeWidth={1.7} />
               <span className="dock__tip">Bantuan</span>
+            </Link>
+            <Link
+              href="/settings"
+              className="dock__btn"
+              aria-label="Pengaturan"
+              aria-current={pathname.startsWith('/settings') ? 'page' : undefined}
+            >
+              {pathname.startsWith('/settings') && (
+                <motion.span layoutId="dock-pill" className="dock__pill" transition={pillSpring} initial={false} />
+              )}
+              <Settings className="ico" strokeWidth={1.7} />
+              <span className="dock__tip">Pengaturan</span>
             </Link>
             <Link href="/auth/signout" className="dock__btn" aria-label="Keluar">
               <LogOut className="ico" strokeWidth={1.7} />

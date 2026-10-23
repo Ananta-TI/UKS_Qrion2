@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { logClientActivity } from '@/lib/activity-client';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import {
@@ -49,8 +51,10 @@ const emptyForm: FormState = {
 
 const tones = ['av--sky', 'av--teal', 'av--coral', 'av--amber', 'av--rose', 'av--plum', 'av--iris'];
 
-export default function StudentsPage() {
+function StudentsPageInner() {
   const supabase = createClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState('');
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +67,12 @@ export default function StudentsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get('add') !== '1') return;
+    openCreate();
+    router.replace('/students', { scroll: false });
+  }, [searchParams, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,9 +145,10 @@ export default function StudentsPage() {
       chronic_diseases: form.chronic_diseases.trim(),
     };
 
-    const { error } = editing
-      ? await supabase.from('students').update(payload).eq('id', editing.id)
-      : await supabase.from('students').insert(payload);
+    const isEdit = Boolean(editing);
+    const { data: saved, error } = isEdit
+      ? await supabase.from('students').update(payload).eq('id', editing!.id).select('id').single()
+      : await supabase.from('students').insert(payload).select('id').single();
 
     setSaving(false);
 
@@ -147,8 +158,16 @@ export default function StudentsPage() {
       return;
     }
 
+    await logClientActivity({
+      action: isEdit ? 'update' : 'create',
+      entity: 'student',
+      entityId: (saved as { id: string } | null)?.id ?? editing?.id ?? null,
+      summary: isEdit ? `Memperbarui data siswa ${fullName}` : `Menambahkan siswa ${fullName}`,
+      metadata: { nis, class: payload.class },
+    });
+
     setOpen(false);
-    setNotice(editing ? `Data ${fullName} diperbarui.` : `Siswa ${fullName} ditambahkan.`);
+    setNotice(isEdit ? `Data ${fullName} diperbarui.` : `Siswa ${fullName} ditambahkan.`);
     setReloadKey((k) => k + 1);
   }
 
@@ -166,6 +185,14 @@ export default function StudentsPage() {
       setNotice(`Gagal menghapus ${s.full_name}: ${error.message}`);
       return;
     }
+
+    await logClientActivity({
+      action: 'delete',
+      entity: 'student',
+      entityId: s.id,
+      summary: `Menghapus siswa ${s.full_name}`,
+      metadata: { nis: s.nis, class: s.class },
+    });
 
     setNotice(`${s.full_name} dihapus.`);
     setReloadKey((k) => k + 1);
@@ -412,5 +439,13 @@ export default function StudentsPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+export default function StudentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <StudentsPageInner />
+    </Suspense>
   );
 }

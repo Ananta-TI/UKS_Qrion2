@@ -26,12 +26,17 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const pathname = request.nextUrl.pathname;
   const isAuthRoute = pathname.startsWith('/auth');
+  const isApiRoute = pathname.startsWith('/api');
 
-  if (!user && !isAuthRoute) {
+  if (!user && !isAuthRoute && !isApiRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth/signin';
     return NextResponse.redirect(url);
   }
+
+  // API routes memeriksa sesinya sendiri dan membalas 401/403 dengan JSON,
+  // bukan dialihkan ke halaman login.
+  if (isApiRoute) return response;
 
   if (user) {
     const { data: profile } = await supabase

@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { logClientActivity } from '@/lib/activity-client';
 import { useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/layout/app-shell';
 import {
@@ -134,8 +135,9 @@ function VisitForm() {
     }
 
     const meds = treatment.split(',').map((m) => m.trim()).filter(Boolean);
+    const dispensed: string[] = [];
     for (const m of meds) {
-      const { data: medsList } = await supabase.from('medicines').select('id,stock').ilike('name', `%${m}%`).limit(1);
+      const { data: medsList } = await supabase.from('medicines').select('id,stock,name').ilike('name', `%${m}%`).limit(1);
       const med = medsList?.[0];
       if (med && (med.stock ?? 0) > 0) {
         await supabase.from('medicines').update({ stock: (med.stock ?? 0) - 1 }).eq('id', med.id);
@@ -146,7 +148,25 @@ function VisitForm() {
           reference_id: visit.id,
           notes: `Diberikan pada kunjungan siswa ${student.full_name}`,
         });
+        dispensed.push(med.name ?? m);
       }
+    }
+
+    await logClientActivity({
+      action: 'create',
+      entity: 'visit',
+      entityId: visit.id,
+      summary: `Mencatat kunjungan ${student.full_name}${chiefComplaint ? ` — ${chiefComplaint}` : ''}`,
+      metadata: { final_status: finalStatus, treatment: treatment || null, student_id: student.id },
+    });
+
+    if (dispensed.length > 0) {
+      await logClientActivity({
+        action: 'stock_out',
+        entity: 'medicine',
+        summary: `Memotong stok obat: ${dispensed.join(', ')}`,
+        metadata: { visit_id: visit.id, medicines: dispensed },
+      });
     }
 
     setSubmitting(false);

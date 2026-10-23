@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logActivity } from '@/lib/activity';
 
 async function requireSuperAdmin() {
   const supabase = await createClient();
@@ -15,13 +16,13 @@ async function requireSuperAdmin() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, full_name, email')
     .eq('id', user.id)
     .maybeSingle();
 
   if (profile?.role !== 'super_admin') redirect('/');
 
-  return { supabase, user };
+  return { supabase, user, profile };
 }
 
 function fail(path: string, message: string): never {
@@ -50,7 +51,7 @@ export async function createSchool(formData: FormData) {
   if (!email.includes('@')) fail('/admin/schools/new', 'Email admin tidak valid.');
   if (password.length < 8) fail('/admin/schools/new', 'Password minimal 8 karakter.');
 
-  const { supabase } = await requireSuperAdmin();
+  const { supabase, user, profile } = await requireSuperAdmin();
 
   let admin: ReturnType<typeof createAdminClient>;
   try {
@@ -92,6 +93,17 @@ export async function createSchool(formData: FormData) {
     .update({ school_id: school.id, role: 'school_admin', email, full_name: `${name} — Admin` })
     .eq('id', created.user.id);
 
+  await logActivity({
+    schoolId: school.id,
+    actorId: user.id,
+    actorName: profile?.full_name ?? user.email,
+    action: 'create',
+    entity: 'school',
+    entityId: school.id,
+    summary: `Membuat sekolah ${name} dan akun admin ${email}`,
+    metadata: { slug, address, phone },
+  });
+
   revalidatePath('/admin');
   redirect('/admin?ok=' + encodeURIComponent(`Sekolah ${name} dan akun ${email} berhasil dibuat.`));
 }
@@ -105,7 +117,7 @@ export async function createSchoolAccount(formData: FormData) {
   if (!email.includes('@')) fail(`/admin/schools/${schoolId}`, 'Email admin tidak valid.');
   if (password.length < 8) fail(`/admin/schools/${schoolId}`, 'Password minimal 8 karakter.');
 
-  const { supabase } = await requireSuperAdmin();
+  const { supabase, user, profile } = await requireSuperAdmin();
 
   const { data: school } = await supabase
     .from('schools')
@@ -150,6 +162,17 @@ export async function createSchoolAccount(formData: FormData) {
     .update({ email, role: 'school_admin', school_id: schoolId, full_name: fullName })
     .eq('id', created.user.id);
 
+  await logActivity({
+    schoolId,
+    actorId: user.id,
+    actorName: profile?.full_name ?? user.email,
+    action: 'create',
+    entity: 'user',
+    entityId: created.user.id,
+    summary: `Membuat akun admin ${email} untuk ${school.name}`,
+    metadata: { role: 'school_admin' },
+  });
+
   revalidatePath('/admin');
   revalidatePath(`/admin/schools/${schoolId}`);
   redirect(`/admin/schools/${schoolId}?ok=` + encodeURIComponent(`Akun ${email} berhasil dibuat.`));
@@ -166,7 +189,7 @@ export async function updateSchool(formData: FormData) {
   if (!id) fail('/admin', 'ID sekolah tidak valid.');
   if (name.length < 2) fail(`/admin/schools/${id}`, 'Nama sekolah minimal 2 karakter.');
 
-  const { supabase } = await requireSuperAdmin();
+  const { supabase, user, profile } = await requireSuperAdmin();
 
   const { error } = await supabase
     .from('schools')
@@ -174,6 +197,17 @@ export async function updateSchool(formData: FormData) {
     .eq('id', id);
 
   if (error) fail(`/admin/schools/${id}`, error.message);
+
+  await logActivity({
+    schoolId: id,
+    actorId: user.id,
+    actorName: profile?.full_name ?? user.email,
+    action: 'update',
+    entity: 'school',
+    entityId: id,
+    summary: `Memperbarui data sekolah ${name}`,
+    metadata: { slug, address, phone, is_active: isActive },
+  });
 
   revalidatePath('/admin');
   revalidatePath(`/admin/schools/${id}`);
@@ -186,7 +220,7 @@ export async function resetPassword(formData: FormData) {
 
   if (password.length < 8) fail(`/admin/schools/${schoolId}`, 'Password minimal 8 karakter.');
 
-  const { supabase } = await requireSuperAdmin();
+  const { supabase, user, profile } = await requireSuperAdmin();
 
   const { data: account } = await supabase
     .from('profiles')
@@ -207,6 +241,16 @@ export async function resetPassword(formData: FormData) {
 
   const { error } = await admin.auth.admin.updateUserById(account.id, { password });
   if (error) fail(`/admin/schools/${schoolId}`, error.message);
+
+  await logActivity({
+    schoolId,
+    actorId: user.id,
+    actorName: profile?.full_name ?? user.email,
+    action: 'update',
+    entity: 'user',
+    entityId: account.id,
+    summary: 'Mereset password akun admin sekolah',
+  });
 
   redirect(`/admin/schools/${schoolId}?ok=` + encodeURIComponent('Password akun sekolah diperbarui.'));
 }
@@ -240,7 +284,7 @@ export async function deleteSchool(formData: FormData) {
 
 export async function impersonateSchool(formData: FormData) {
   const schoolId = String(formData.get('school_id') ?? '');
-  const { supabase } = await requireSuperAdmin();
+  const { supabase, user, profile } = await requireSuperAdmin();
 
   const { data: account } = await supabase
     .from('profiles')
@@ -266,6 +310,15 @@ export async function impersonateSchool(formData: FormData) {
 
   const token = data?.properties?.hashed_token;
   if (error || !token) fail('/admin', error?.message ?? 'Gagal membuat tautan login.');
+
+  await logActivity({
+    schoolId,
+    actorId: user.id,
+    actorName: profile?.full_name ?? user.email,
+    action: 'impersonate',
+    entity: 'user',
+    summary: `Masuk sebagai admin sekolah ${account.email}`,
+  });
 
   const { error: verifyError } = await supabase.auth.verifyOtp({
     type: 'magiclink',

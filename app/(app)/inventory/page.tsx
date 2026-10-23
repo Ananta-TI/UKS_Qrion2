@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { logClientActivity } from '@/lib/activity-client';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import {
@@ -17,8 +19,10 @@ import {
 
 type Filter = 'all' | 'low' | 'expiring';
 
-export default function InventoryPage() {
+function InventoryPageInner() {
   const supabase = createClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [medicines, setMedicines] = useState<any[]>([]);
   const [now, setNow] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -49,6 +53,13 @@ export default function InventoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (searchParams.get('add') !== '1') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpen(true);
+    router.replace('/inventory', { scroll: false });
+  }, [searchParams, router]);
+
   const lowOf = (m: any) => (m.stock ?? 0) <= (m.min_stock ?? 5);
   const expiringOf = (m: any) => {
     if (!m.expiry_date) return false;
@@ -70,24 +81,49 @@ export default function InventoryPage() {
 
   async function addStock(id: string, qty: number) {
     const m = medicines.find((x) => x.id === id);
-    await supabase.from('medicines').update({ stock: (m?.stock ?? 0) + qty }).eq('id', id);
+    const { error } = await supabase
+      .from('medicines')
+      .update({ stock: (m?.stock ?? 0) + qty })
+      .eq('id', id);
+    if (error) return;
+
     await supabase.from('medicine_logs').insert({ medicine_id: id, type: 'in', qty, notes: 'Restok' });
+    await logClientActivity({
+      action: 'restock',
+      entity: 'medicine',
+      entityId: id,
+      summary: `Menambah stok ${m?.name ?? 'obat'} sebanyak ${qty}`,
+      metadata: { stock_before: m?.stock ?? 0, added: qty },
+    });
     load();
   }
 
   async function createMedicine() {
     if (!form.name) return;
     setSaving(true);
-    await supabase.from('medicines').insert({
-      name: form.name,
-      category: form.category || null,
-      unit: form.unit,
-      stock: parseInt(form.stock || '0', 10),
-      min_stock: parseInt(form.min_stock || '5', 10),
-      location: form.location || null,
-      expiry_date: form.expiry_date || null,
-    });
+    const { data: created, error } = await supabase
+      .from('medicines')
+      .insert({
+        name: form.name,
+        category: form.category || null,
+        unit: form.unit,
+        stock: parseInt(form.stock || '0', 10),
+        min_stock: parseInt(form.min_stock || '5', 10),
+        location: form.location || null,
+        expiry_date: form.expiry_date || null,
+      })
+      .select('id')
+      .single();
     setSaving(false);
+    if (error) return;
+
+    await logClientActivity({
+      action: 'create',
+      entity: 'medicine',
+      entityId: (created as { id: string } | null)?.id ?? null,
+      summary: `Menambahkan obat ${form.name}`,
+      metadata: { category: form.category || null, stock: parseInt(form.stock || '0', 10) },
+    });
     setOpen(false);
     setForm({ name: '', category: '', unit: 'pcs', stock: '', min_stock: '5', location: '', expiry_date: '' });
     load();
@@ -264,5 +300,13 @@ export default function InventoryPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+export default function InventoryPage() {
+  return (
+    <Suspense fallback={null}>
+      <InventoryPageInner />
+    </Suspense>
   );
 }

@@ -13,7 +13,7 @@ export const metadata = {
   description: 'Aplikasi internal untuk Staf/Petugas UKS',
 };
 
-const themeScript = `(function(d){try{var t=localStorage.getItem('uks:theme')||'light';if(t==='system'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}d.dataset.theme=t}catch(e){}d.dataset.accent='ocean'})(document.documentElement);`;
+const themeScript = `(function(d){try{var t=localStorage.getItem('uks:theme')||'light';if(t==='system'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}d.dataset.theme=t;var a=localStorage.getItem('uks:accent');if(a)d.dataset.accent=a;var n=localStorage.getItem('uks:density');if(n)d.dataset.density=n}catch(e){}})(document.documentElement);`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

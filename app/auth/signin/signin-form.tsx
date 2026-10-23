@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { logClientActivity } from '@/lib/activity-client';
 import { useRouter } from 'next/navigation';
 import { HeartPulse, LogIn, AlertCircle } from 'lucide-react';
 
@@ -18,8 +19,18 @@ export function SignInForm({ initialError }: { initialError: string | null }) {
     setLoading(true);
     setError(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setLoading(false);
+      setError(error.message);
+      return;
+    }
+    await logClientActivity({
+      action: 'login',
+      entity: 'session',
+      summary: `Masuk ke aplikasi sebagai ${email}`,
+      metadata: { method: 'password' },
+    });
     setLoading(false);
-    if (error) { setError(error.message); return; }
     router.push('/');
     router.refresh();
   }

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { EChartsAreaChart, type ChartConfig } from '@/components/evilcharts/charts/echarts-area-chart';
 
 const pillSpring = { type: 'spring', stiffness: 380, damping: 32, mass: 0.7 } as const;
 
@@ -134,40 +135,7 @@ function buildGroups(visits: VisitRow[], groupBy: GroupBy, metric: Metric): Grou
     : rows.sort((a, b) => b.value - a.value);
 }
 
-function smoothPath(points: [number, number][]) {
-  if (points.length === 0) return '';
-  if (points.length === 1) return `M ${points[0][0]} ${points[0][1]}`;
-
-  let d = `M ${points[0][0]} ${points[0][1]}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i - 1] ?? points[i];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[i + 2] ?? p2;
-    const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
-    const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
-    const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
-    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2[0]} ${p2[1]}`;
-  }
-  return d;
-}
-
-function AreaChart({ data, id }: { data: GroupDatum[]; id: string }) {
-  const width = 720;
-  const height = 240;
-  const padX = 8;
-  const padTop = 14;
-  const padBottom = 30;
-  const innerH = height - padTop - padBottom;
-  const max = Math.max(1, ...data.map((d) => d.value));
-  const step = data.length > 1 ? (width - padX * 2) / (data.length - 1) : 0;
-
-  const points: [number, number][] = data.map((d, i) => [
-    padX + i * step,
-    padTop + innerH - (d.value / max) * innerH,
-  ]);
-
+function AreaChart({ data }: { data: GroupDatum[]; id?: string }) {
   if (data.length < 2) {
     return (
       <div className="empty" style={{ padding: '32px 8px' }}>
@@ -177,73 +145,55 @@ function AreaChart({ data, id }: { data: GroupDatum[]; id: string }) {
     );
   }
 
-  const line = smoothPath(points);
-  const area = `${line} L ${points[points.length - 1][0]} ${padTop + innerH} L ${points[0][0]} ${padTop + innerH} Z`;
-  const labelEvery = Math.ceil(data.length / 12);
-  const signature = data.map((d) => `${d.key}:${d.value}`).join('|');
+  const chartData = data.map((d) => ({
+    label: d.label,
+    value: d.value,
+  }));
+
+  const chartKey = data.map((d) => `${d.key}:${d.value}`).join('|');
+
+  const chartConfig: ChartConfig = {
+    value: {
+      label: 'Jumlah',
+      colors: {
+        light: ['#10b981', '#0ea5e9', '#8b5cf6'],
+        dark: ['#34d399', '#38bdf8', '#a78bfa'],
+      },
+    },
+  };
 
   return (
-    <svg
-      key={signature}
-      viewBox={`0 0 ${width} ${height}`}
-      className="rpt__svg"
-      role="img"
-      aria-label="Grafik tren"
-    >
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--coral)" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="var(--coral)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
-      {[0, 0.33, 0.66, 1].map((t) => (
-        <line
-          key={t}
-          x1={padX}
-          x2={width - padX}
-          y1={padTop + innerH * t}
-          y2={padTop + innerH * t}
-          stroke="var(--line)"
-          strokeDasharray="4 6"
+    <div key={chartKey} className="relative w-full" style={{ minHeight: 240, height: 260 }}>
+      <EChartsAreaChart
+        key={chartKey}
+        data={chartData}
+        config={chartConfig}
+        xDataKey="label"
+        className="h-full w-full"
+        curveType="monotone"
+        chartOptions={{
+          grid: {
+            left: 36,
+            right: 18,
+            top: 20,
+            bottom: 26,
+          },
+          yAxis: {
+            type: 'value',
+            min: 0,
+            splitNumber: 3,
+          },
+        }}
+      >
+        <EChartsAreaChart.Tooltip variant="frosted-glass" />
+        <EChartsAreaChart.Area
+          dataKey="value"
+          variant="gradient"
+          strokeVariant="solid"
+          strokeWidth={2.5}
         />
-      ))}
-
-      <path className="rpt__area" d={area} fill={`url(#${id})`} />
-      <path
-        className="rpt__line"
-        d={line}
-        pathLength={1}
-        fill="none"
-        stroke="var(--coral)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-
-      {points.map(([x, y], i) => (
-        <circle
-          key={data[i].key}
-          className="rpt__pt"
-          style={{ animationDelay: `${180 + i * 35}ms` }}
-          cx={x}
-          cy={y}
-          r="3.5"
-          fill="var(--coral)"
-          stroke="var(--surface)"
-          strokeWidth="2"
-        >
-          <title>{`${data[i].label}: ${data[i].value}`}</title>
-        </circle>
-      ))}
-
-      {data.map((d, i) =>
-        i % labelEvery === 0 ? (
-          <text key={d.key} x={points[i][0]} y={height - 8} textAnchor="middle" className="rpt__axis">
-            {d.label}
-          </text>
-        ) : null
-      )}
-    </svg>
+      </EChartsAreaChart>
+    </div>
   );
 }
 
@@ -292,7 +242,7 @@ function Gauge({ pct }: { pct: number }) {
           key={pct}
           d={d}
           fill="none"
-          stroke="var(--good)"
+          stroke="var(--chart)"
           strokeWidth="14"
           strokeLinecap="round"
           initial={{ pathLength: 0 }}
