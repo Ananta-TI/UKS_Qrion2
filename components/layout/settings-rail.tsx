@@ -46,7 +46,7 @@ export function SettingsRail() {
         </nav>
       </LayoutGroup>
       <p className="setrail__note">
-        <Lock className="ico" /> Preferensi tersimpan di browser ini.
+        <Lock className="ico" /> Preferensi tersimpan di akun ini.
       </p>
     </aside>
   );

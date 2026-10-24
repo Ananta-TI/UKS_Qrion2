@@ -183,8 +183,8 @@ export function DataPanel({ schoolId, schoolName }: { schoolId: string; schoolNa
             <div className="card__title">
               <HardDrive className="ico" />
               <span>
-                Preferensi browser
-                <span className="card__sub">Pengaturan lokal yang tidak memengaruhi data sekolah.</span>
+                Preferensi tampilan
+                <span className="card__sub">Tersimpan di akun Anda dan tidak memengaruhi data sekolah.</span>
               </span>
             </div>
           </div>

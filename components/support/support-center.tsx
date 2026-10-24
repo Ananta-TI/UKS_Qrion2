@@ -92,7 +92,7 @@ const faqs: Faq[] = [
     id: 'tema',
     category: 'akun',
     q: 'Bagaimana mengganti tema terang atau gelap?',
-    a: 'Klik ikon Tema pada dock. Pilihan tema disimpan di browser perangkat ini, jadi tidak mengubah tampilan pengguna lain.',
+    a: 'Klik ikon Tema pada dock atau buka Pengaturan → Tampilan. Pilihan tema disimpan di akun Anda, jadi setiap pengguna punya tampilannya sendiri.',
     keywords: 'dark mode gelap terang tampilan',
   },
   {

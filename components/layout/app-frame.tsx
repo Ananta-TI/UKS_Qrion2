@@ -156,8 +156,6 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {pathname.startsWith('/settings') && <SettingsRail />}
-
         <LayoutGroup id="dock">
           <nav className="dock" aria-label="Aksi cepat">
             <button
@@ -253,7 +251,10 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </nav>
         </LayoutGroup>
 
-        <main className="main">{children}</main>
+        <main className="main">
+          {pathname.startsWith('/settings') && <SettingsRail />}
+          {children}
+        </main>
       </div>
 
       <AnimatePresence>
