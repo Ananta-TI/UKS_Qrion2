@@ -1,6 +1,7 @@
 import { Urbanist } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/components/ui/toast';
+import { getPreferences } from '@/lib/preferences';
 
 const urbanist = Urbanist({
   subsets: ['latin'],
@@ -14,19 +15,25 @@ export const metadata = {
   description: 'Aplikasi internal untuk Staf/Petugas UKS',
 };
 
-const themeScript = `(function(d){try{var t=localStorage.getItem('uks:theme')||'light';if(t==='system'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}d.dataset.theme=t;var a=localStorage.getItem('uks:accent');if(a)d.dataset.accent=a;var n=localStorage.getItem('uks:density');if(n)d.dataset.density=n}catch(e){}})(document.documentElement);`;
+// Hanya dipakai untuk preferensi "Sistem"; tema eksplisit sudah dirender server-side per akun.
+const systemThemeScript = `(function(d){try{if(d.dataset.themePref!=='system')return;var m=matchMedia('(prefers-color-scheme: dark)');var s=function(){d.dataset.theme=m.matches?'dark':'light'};s();m.addEventListener('change',s)}catch(e){}})(document.documentElement);`;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const prefs = await getPreferences();
+  const theme = prefs.theme === 'system' ? 'light' : prefs.theme;
+
   return (
     <html
       lang="id"
-      data-theme="light"
-      data-accent="ocean"
+      data-theme={theme}
+      data-theme-pref={prefs.theme}
+      data-accent={prefs.accent}
+      data-density={prefs.density}
       className={urbanist.variable}
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: systemThemeScript }} />
       </head>
       <body>
         <ToastProvider>{children}</ToastProvider>

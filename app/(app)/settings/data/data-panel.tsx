@@ -13,6 +13,8 @@ import {
 import { CountUp } from '@/components/ui/count-up';
 import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
+import { defaultPreferences } from '@/lib/user-prefs';
+import { savePreferences } from '../preferences-actions';
 
 type Counts = {
   students: number | null;
@@ -106,23 +108,29 @@ export function DataPanel({ schoolId, schoolName }: { schoolId: string; schoolNa
     setExporting(false);
   }
 
-  function resetPreferences() {
+  async function resetPreferences() {
     const confirmed = window.confirm(
       'Kembalikan tema, aksen, kerapatan, kalender, dan preferensi notifikasi ke default? Data sekolah tidak dihapus.'
     );
     if (!confirmed) return;
 
     try {
-      ['uks:theme', 'uks:accent', 'uks:density', 'uks:calendar', 'uks:notifications'].forEach((key) =>
-        localStorage.removeItem(key)
-      );
+      localStorage.removeItem('uks:notifications');
     } catch {}
+
+    // Hanya preferensi akun ini yang direset, akun lain tidak terpengaruh.
+    const result = await savePreferences(defaultPreferences);
 
     const root = document.documentElement;
     root.dataset.theme = 'light';
+    root.dataset.themePref = 'light';
     root.dataset.accent = 'ocean';
     root.dataset.density = 'comfortable';
-    setMessage('Preferensi browser dikembalikan ke default. Data sekolah tetap aman.');
+    setMessage(
+      result.ok
+        ? 'Preferensi akun ini dikembalikan ke default. Data sekolah tetap aman.'
+        : result.error ?? 'Preferensi gagal disimpan. Coba lagi.'
+    );
   }
 
   return (

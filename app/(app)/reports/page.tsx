@@ -22,6 +22,7 @@ import {
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { EChartsAreaChart, type ChartConfig } from '@/components/evilcharts/charts/echarts-area-chart';
+import { useChartColors } from '@/components/charts/use-chart-colors';
 
 const pillSpring = { type: 'spring', stiffness: 380, damping: 32, mass: 0.7 } as const;
 
@@ -136,6 +137,8 @@ function buildGroups(visits: VisitRow[], groupBy: GroupBy, metric: Metric): Grou
 }
 
 function AreaChart({ data }: { data: GroupDatum[]; id?: string }) {
+  const accent = useChartColors();
+
   if (data.length < 2) {
     return (
       <div className="empty" style={{ padding: '32px 8px' }}>
@@ -156,8 +159,8 @@ function AreaChart({ data }: { data: GroupDatum[]; id?: string }) {
     value: {
       label: 'Jumlah',
       colors: {
-        light: ['#10b981', '#0ea5e9', '#8b5cf6'],
-        dark: ['#34d399', '#38bdf8', '#a78bfa'],
+        light: [accent.primary, accent.secondary],
+        dark: [accent.primary, accent.secondary],
       },
     },
   };

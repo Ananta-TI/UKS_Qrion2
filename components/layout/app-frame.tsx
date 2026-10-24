@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { CommandPalette } from '@/components/layout/command-palette';
 import { SettingsRail } from '@/components/layout/settings-rail';
+import { savePreferences } from '@/app/(app)/settings/preferences-actions';
 import {
   LayoutDashboard,
   Users,
@@ -49,9 +50,9 @@ function toggleTheme() {
   const root = document.documentElement;
   const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
   root.dataset.theme = next;
-  try {
-    localStorage.setItem('uks:theme', next);
-  } catch {}
+  root.dataset.themePref = next;
+  // Simpan ke akun yang sedang login, bukan ke browser bersama.
+  void savePreferences({ theme: next });
 }
 
 

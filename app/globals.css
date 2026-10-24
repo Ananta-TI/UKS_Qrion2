@@ -1181,6 +1181,19 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
   outline: none;
   margin-top: 4px;
 }
+.year-chart .chartc__plot.chart {
+  min-height: 0;
+}
+.year-chart .chart__x text,
+.year-chart .chart__grid text {
+  font-size: 12px;
+}
+@media (max-width: 720px) {
+  .year-chart .chart__x text,
+  .year-chart .chart__grid text {
+    font-size: 28px;
+  }
+}
 .chart__svg {
   width: 100%;
   height: auto;
