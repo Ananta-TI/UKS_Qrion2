@@ -322,7 +322,7 @@ export function SupportCenter({
                     {f.links && (
                       <div className="faq__links">
                         {f.links.map((l) => (
-                          <Link key={l.href} href={l.href} className="btn btn--ghost btn--xs">
+                          <Link key={l.href} href={l.href} prefetch={false} className="btn btn--ghost btn--xs">
                             {l.label}
                             <ArrowUpRight className="ico" />
                           </Link>

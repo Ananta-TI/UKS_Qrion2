@@ -75,7 +75,7 @@ export default function SettingsIntegrationsPage() {
               <b>Butuh integrasi tertentu?</b>
               <p>Ceritakan alur kerja sekolah Anda; tim Qrion akan membantu menilai kebutuhan integrasinya.</p>
             </div>
-            <Link href="/support" className="btn btn--ghost btn--sm">
+            <Link href="/support" prefetch={false} className="btn btn--ghost btn--sm">
               Ajukan integrasi
               <ArrowUpRight className="ico" />
             </Link>

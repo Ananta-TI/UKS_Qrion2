@@ -109,7 +109,7 @@ export default async function SettingsUsersPage() {
               </p>
               {!canManage && <p>Hanya admin sekolah yang dapat meminta perubahan akun.</p>}
             </div>
-            <Link href="/support" className="btn btn--ghost btn--sm">
+            <Link href="/support" prefetch={false} className="btn btn--ghost btn--sm">
               Hubungi dukungan
               <ArrowUpRight className="ico" />
             </Link>

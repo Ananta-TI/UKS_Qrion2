@@ -22,7 +22,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import { Sparkline } from '@/components/dashboard/spark';
 import { YearChart } from '@/components/dashboard/year-chart';
-import { getSessionProfile } from '@/lib/auth';
+import { getAuthUser, getSessionProfile } from '@/lib/auth';
 
 type VisitRow = {
   id: string;
@@ -107,7 +107,7 @@ function badgeFor(action: string) {
 }
 
 export default async function DashboardPage() {
-  const { profile, user, supabase } = await getSessionProfile();
+  const { user, supabase } = await getAuthUser();
   if (!user) redirect('/auth/signin');
 
   const now = new Date();
@@ -120,7 +120,8 @@ export default async function DashboardPage() {
   since30.setDate(since30.getDate() - 29);
   const lookback = new Date(Math.min(yearStart.getTime(), since30.getTime()));
 
-  const [studentsRes, todayRes, visitsRes, medicinesRes, activityRes] = await Promise.all([
+  // Mulai query data lebih dulu, lalu ambil profil paralel dengan query tersebut.
+  const dataPromise = Promise.all([
     supabase.from('students').select('id,class').limit(5000),
     supabase
       .from('visits')
@@ -137,13 +138,14 @@ export default async function DashboardPage() {
     supabase
       .from('medicines')
       .select('id,name,category,unit,stock,min_stock,expiry_date,location')
-      .order('name', { ascending: true }),
-    supabase
-      .from('activity_logs')
+      .order('name', { ascending: true }),    supabase.from('activity_logs')
       .select('id,actor_name,action,entity,summary,created_at')
       .order('created_at', { ascending: false })
       .limit(7),
   ]);
+
+  const { profile } = await getSessionProfile();
+  const [studentsRes, todayRes, visitsRes, medicinesRes, activityRes] = await dataPromise;
 
   const students = (studentsRes.data ?? []) as { id: string; class: string | null }[];
   const todayVisits = (todayRes.data ?? []) as unknown as VisitRow[];
@@ -326,10 +328,10 @@ export default async function DashboardPage() {
             <div className="dash-hero__top">
               <span className="dash-hero__eyebrow">{dateLabel}</span>
               <div className="dash-hero__actions">
-                <Link href="/visits/new" className="btn btn--primary btn--sm">
+                <Link href="/visits/new" prefetch={false} className="btn btn--primary btn--sm">
                   <Plus className="ico" /> Catat kunjungan
                 </Link>
-                <Link href="/reports" className="btn btn--ghost btn--sm">
+                <Link href="/reports" prefetch={false} className="btn btn--ghost btn--sm">
                   <TrendingUp className="ico" /> Lihat laporan
                 </Link>
               </div>
@@ -406,7 +408,7 @@ export default async function DashboardPage() {
                   <span className="card__sub">Dibanding 7 hari terakhir.</span>
                 </span>
               </div>
-              <Link href="/visits" className="card__link dash-link">
+              <Link href="/visits" prefetch={false} className="card__link dash-link">
                 Semua <ChevronRight className="ico" />
               </Link>
             </div>
@@ -600,7 +602,7 @@ export default async function DashboardPage() {
                   <span className="card__sub">Siswa yang ditangani UKS hari ini.</span>
                 </span>
               </div>
-              <Link href="/visits" className="card__link dash-link">
+              <Link href="/visits" prefetch={false} className="card__link dash-link">
                 Semua <ChevronRight className="ico" />
               </Link>
             </div>
@@ -610,7 +612,7 @@ export default async function DashboardPage() {
                 <ClipboardList className="ico" />
                 <div className="empty__title">Belum ada kunjungan hari ini</div>
                 <div className="empty__text">Kunjungan yang dicatat akan muncul di sini.</div>
-                <Link href="/visits/new" className="btn btn--primary btn--sm">
+                <Link href="/visits/new" prefetch={false} className="btn btn--primary btn--sm">
                   <Plus className="ico" /> Catat kunjungan
                 </Link>
               </div>
@@ -655,7 +657,7 @@ export default async function DashboardPage() {
                   <span className="card__sub">Obat di bawah stok minimum.</span>
                 </span>
               </div>
-              <Link href="/inventory" className="card__link dash-link">
+              <Link href="/inventory" prefetch={false} className="card__link dash-link">
                 Restock <ChevronRight className="ico" />
               </Link>
             </div>
@@ -753,7 +755,7 @@ export default async function DashboardPage() {
                   <span className="card__sub">Sebaran hasil penanganan.</span>
                 </span>
               </div>
-              <Link href="/visits" className="card__link dash-link">
+              <Link href="/visits" prefetch={false} className="card__link dash-link">
                 Semua <ChevronRight className="ico" />
               </Link>
             </div>

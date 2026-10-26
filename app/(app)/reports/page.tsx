@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { LayoutGroup, motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import { AppShell } from '@/components/layout/app-shell';
@@ -19,10 +20,14 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import { EChartsAreaChart, type ChartConfig } from '@/components/evilcharts/charts/echarts-area-chart';
+import type { ChartConfig } from '@/components/evilcharts/charts/echarts-area-chart';
 import { useChartColors } from '@/components/charts/use-chart-colors';
+
+// ECharts dan jsPDF tidak ikut bundle awal halaman Laporan.
+const ReportAreaChart = dynamic(() => import('@/components/charts/report-area-chart'), {
+  ssr: false,
+  loading: () => <div className="skel" style={{ height: 260, width: '100%' }} />,
+});
 
 const pillSpring = { type: 'spring', stiffness: 380, damping: 32, mass: 0.7 } as const;
 
@@ -167,7 +172,7 @@ function AreaChart({ data }: { data: GroupDatum[]; id?: string }) {
 
   return (
     <div key={chartKey} className="relative w-full" style={{ minHeight: 240, height: 260 }}>
-      <EChartsAreaChart
+      <ReportAreaChart
         key={chartKey}
         data={chartData}
         config={chartConfig}
@@ -187,15 +192,7 @@ function AreaChart({ data }: { data: GroupDatum[]; id?: string }) {
             splitNumber: 3,
           },
         }}
-      >
-        <EChartsAreaChart.Tooltip variant="frosted-glass" />
-        <EChartsAreaChart.Area
-          dataKey="value"
-          variant="gradient"
-          strokeVariant="solid"
-          strokeWidth={2.5}
-        />
-      </EChartsAreaChart>
+      />
     </div>
   );
 }
@@ -431,7 +428,10 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url);
   }
 
-  function exportPDF() {
+  async function exportPDF() {
+    // Unduh library PDF hanya saat tombol diklik.
+    const { default: jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
     const doc = new jsPDF();
     doc.setFontSize(18);
     doc.text('Laporan Kunjungan UKS', 14, 22);

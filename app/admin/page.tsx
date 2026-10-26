@@ -58,7 +58,7 @@ export default async function AdminHomePage({
           <p>Kelola sekolah, akun admin, dan akses masuk ke aplikasi UKS.</p>
         </div>
         <div className="adm__actions">
-          <Link href="/admin/schools/new" className="btn btn--primary">
+          <Link href="/admin/schools/new" prefetch={false} className="btn btn--primary">
             <Plus className="ico" /> Tambah Sekolah
           </Link>
         </div>
@@ -153,7 +153,7 @@ export default async function AdminHomePage({
                       </td>
                       <td className="r">
                         <div className="inline-flex items-center gap-2">
-                          <Link href={`/admin/schools/${s.id}`} className="btn btn--ghost btn--xs">
+                          <Link href={`/admin/schools/${s.id}`} prefetch={false} className="btn btn--ghost btn--xs">
                             Kelola
                           </Link>
                           {account ? (
@@ -164,7 +164,7 @@ export default async function AdminHomePage({
                               action={impersonateSchool}
                             />
                           ) : (
-                            <Link href={`/admin/schools/${s.id}`} className="btn btn--soft btn--xs">
+                            <Link href={`/admin/schools/${s.id}`} prefetch={false} className="btn btn--soft btn--xs">
                               <KeyRound className="ico" /> Atur akun
                             </Link>
                           )}

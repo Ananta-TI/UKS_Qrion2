@@ -1,20 +1,15 @@
 import { redirect } from 'next/navigation';
-import { getSessionProfile } from '@/lib/auth';
+import { getSessionProfile, profileSchool } from '@/lib/auth';
 import { SettingsShell } from '@/components/settings/settings-shell';
 import { DataPanel } from './data-panel';
 
 export default async function SettingsDataPage() {
-  const { profile, supabase } = await getSessionProfile();
+  const { profile } = await getSessionProfile();
 
   if (!profile) redirect('/auth/signin');
   if (!profile.school_id) redirect('/admin');
 
-  const { data: school } = await supabase
-    .from('schools')
-    .select('id,name')
-    .eq('id', profile.school_id)
-    .maybeSingle();
-
+  const school = profileSchool(profile);
   if (!school) redirect('/');
 
   return (

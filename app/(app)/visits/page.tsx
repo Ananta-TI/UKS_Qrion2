@@ -46,7 +46,7 @@ export default function VisitsPage() {
       title="Rekam Medis"
       crumbs={[{ label: 'UKS', href: '/' }, { label: 'Kunjungan' }]}
       actions={
-        <Link href="/visits/new" className="btn btn--primary">
+        <Link href="/visits/new" prefetch={false} className="btn btn--primary">
           <Plus className="ico" /> Catat Kunjungan
         </Link>
       }

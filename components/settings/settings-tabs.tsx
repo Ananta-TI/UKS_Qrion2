@@ -19,6 +19,7 @@ export function SettingsTabs() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={false}
               className="chip"
               aria-current={active ? 'page' : undefined}
               aria-pressed={active}

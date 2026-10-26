@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { ShieldCheck } from 'lucide-react';
-import { getSessionProfile } from '@/lib/auth';
+import { getSessionProfile, profileSchool } from '@/lib/auth';
 import { SettingsShell } from '@/components/settings/settings-shell';
 import { CompanyForm } from './company-form';
 
@@ -9,17 +9,12 @@ export default async function SettingsPage({
 }: {
   searchParams: Promise<{ ok?: string; error?: string }>;
 }) {
-  const { profile, user, supabase } = await getSessionProfile();
+  const { profile, user } = await getSessionProfile();
 
   if (!profile) redirect('/auth/signin');
   if (!profile.school_id) redirect('/admin');
 
-  const { data: school } = await supabase
-    .from('schools')
-    .select('id,name,slug,address,phone,is_active')
-    .eq('id', profile.school_id)
-    .maybeSingle();
-
+  const school = profileSchool(profile);
   if (!school) redirect('/');
 
   const params = await searchParams;

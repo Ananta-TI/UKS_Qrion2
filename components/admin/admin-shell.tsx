@@ -11,7 +11,7 @@ export function AdminShell({ email, children }: { email: string; children: React
   return (
     <div className="adm">
       <aside className="adm__side">
-        <Link href="/admin" className="adm__brand">
+        <Link href="/admin" prefetch={false} className="adm__brand">
           <span className="adm__mark">
             <ShieldCheck className="ico" strokeWidth={1.8} />
           </span>
@@ -22,11 +22,15 @@ export function AdminShell({ email, children }: { email: string; children: React
         </Link>
 
         <nav className="adm__nav" aria-label="Navigasi super admin">
-          <Link href="/admin" aria-current={onSchools ? 'page' : undefined}>
+          <Link href="/admin" prefetch={false} aria-current={onSchools ? 'page' : undefined}>
             <Building2 className="ico" strokeWidth={1.7} />
             <span>Sekolah</span>
           </Link>
-          <Link href="/admin/schools/new" aria-current={pathname === '/admin/schools/new' ? 'page' : undefined}>
+          <Link
+            href="/admin/schools/new"
+            prefetch={false}
+            aria-current={pathname === '/admin/schools/new' ? 'page' : undefined}
+          >
             <PlusCircle className="ico" strokeWidth={1.7} />
             <span>Tambah Sekolah</span>
           </Link>
@@ -37,9 +41,11 @@ export function AdminShell({ email, children }: { email: string; children: React
         <div className="adm__me">
           <small>Masuk sebagai</small>
           <b title={email}>{email}</b>
-          <Link href="/auth/signout" className="adm__out">
-            <LogOut className="ico" strokeWidth={1.7} /> Keluar
-          </Link>
+          <form action="/auth/signout" method="post" className="adm__outform">
+            <button type="submit" className="adm__out">
+              <LogOut className="ico" strokeWidth={1.7} /> Keluar
+            </button>
+          </form>
         </div>
       </aside>
 

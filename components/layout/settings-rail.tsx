@@ -22,6 +22,7 @@ export function SettingsRail() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className="setrail__item"
                 aria-current={active ? 'page' : undefined}
               >

@@ -18,7 +18,7 @@ export default async function NewSchoolPage({
     <>
       <div className="adm__head">
         <div>
-          <Link href="/admin" className="adm__back">
+          <Link href="/admin" prefetch={false} className="adm__back">
             <ArrowLeft className="ico" /> Kembali ke daftar
           </Link>
           <h1>Tambah Sekolah</h1>
@@ -82,7 +82,7 @@ export default async function NewSchoolPage({
         </div>
 
         <div className="flex items-center justify-end gap-2 mt-6">
-          <Link href="/admin" className="btn btn--ghost">
+          <Link href="/admin" prefetch={false} className="btn btn--ghost">
             Batal
           </Link>
           <button type="submit" className="btn btn--primary">

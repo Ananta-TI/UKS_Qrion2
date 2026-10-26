@@ -18,7 +18,7 @@ export function AppShell({
 
   return (
     <>
-      <div className="phead">
+      <div className="phead page-enter">
         <div className="phead__lead">
           <nav className="crumbs" aria-label="Breadcrumb">
             {trail.map((c, i) => {
@@ -26,7 +26,7 @@ export function AppShell({
               return (
                 <span key={i} className="inline-flex items-center gap-1.5">
                   {c.href && !last ? (
-                    <Link href={c.href}>{c.label}</Link>
+                    <Link href={c.href} prefetch={false}>{c.label}</Link>
                   ) : (
                     <span aria-current={last ? 'page' : undefined}>{c.label}</span>
                   )}
@@ -40,7 +40,7 @@ export function AppShell({
         {actions ? <div className="phead__actions">{actions}</div> : null}
       </div>
 
-      <div className="view">{children}</div>
+      <div className="view page-enter">{children}</div>
     </>
   );
 }

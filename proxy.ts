@@ -1,7 +1,25 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+/**
+ * Middleware hanya memverifikasi sesi dari claims JWT (ES256, verifikasi lokal).
+ * Pengecekan role dan status sekolah dilakukan di layout server, sehingga
+ * setiap navigasi tidak lagi menunggu query database di middleware.
+ */
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // API memeriksa sesinya sendiri dan membalas JSON 401/403.
+  if (pathname.startsWith('/api')) {
+    return NextResponse.next({ request: { headers: request.headers } });
+  }
+
+  // Halaman auth tidak perlu diverifikasi; page-nya yang mengarahkan user
+  // yang sudah punya sesi ke halaman yang tepat.
+  if (pathname.startsWith('/auth')) {
+    return NextResponse.next({ request: { headers: request.headers } });
+  }
+
   let response = NextResponse.next({
     request: { headers: request.headers },
   });
@@ -23,62 +41,13 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
-  const pathname = request.nextUrl.pathname;
-  const isAuthRoute = pathname.startsWith('/auth');
-  const isApiRoute = pathname.startsWith('/api');
+  const { data } = await supabase.auth.getClaims();
+  const userId = data?.claims?.sub ?? null;
 
-  if (!user && !isAuthRoute && !isApiRoute) {
+  if (!userId) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth/signin';
     return NextResponse.redirect(url);
-  }
-
-  // API routes memeriksa sesinya sendiri dan membalas 401/403 dengan JSON,
-  // bukan dialihkan ke halaman login.
-  if (isApiRoute) return response;
-
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, school_id')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    const role = profile?.role ?? 'staff';
-    const isAdminRoute = pathname.startsWith('/admin');
-
-    if (isAdminRoute && role !== 'super_admin') {
-      const url = request.nextUrl.clone();
-      url.pathname = '/';
-      return NextResponse.redirect(url);
-    }
-
-    if (role !== 'super_admin' && profile?.school_id && !isAuthRoute) {
-      const { data: school } = await supabase
-        .from('schools')
-        .select('is_active')
-        .eq('id', profile.school_id)
-        .maybeSingle();
-
-      if (school && school.is_active === false) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/auth/signout';
-        return NextResponse.redirect(url);
-      }
-    }
-
-    if (role === 'super_admin' && !isAdminRoute && !isAuthRoute) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/admin';
-      return NextResponse.redirect(url);
-    }
-
-    if (pathname === '/auth/signin') {
-      const url = request.nextUrl.clone();
-      url.pathname = role === 'super_admin' ? '/admin' : '/';
-      return NextResponse.redirect(url);
-    }
   }
 
   return response;

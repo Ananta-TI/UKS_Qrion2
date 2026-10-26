@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -52,6 +53,11 @@ const emptyForm: FormState = {
 
 const tones = ['av--sky', 'av--teal', 'av--coral', 'av--amber', 'av--rose', 'av--plum', 'av--iris'];
 
+/** Modal dirender di body agar tidak terkurung ancestor yang punya transform. */
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  return createPortal(children, document.body);
+}
+
 function StudentsPageInner() {
   const supabase = createClient();
   const router = useRouter();
@@ -74,6 +80,23 @@ function StudentsPageInner() {
     openCreate();
     router.replace('/students', { scroll: false });
   }, [searchParams, router]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,7 +230,7 @@ function StudentsPageInner() {
       crumbs={[{ label: 'UKS', href: '/' }, { label: 'Siswa' }]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/visits/new" className="btn btn--ghost">
+          <Link href="/visits/new" prefetch={false} className="btn btn--ghost">
             <Stethoscope className="ico" /> Catat Kunjungan
           </Link>
           <button type="button" className="btn btn--primary" onClick={openCreate}>
@@ -256,7 +279,7 @@ function StudentsPageInner() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         {students.map((s, i) => (
           <div key={s.id} className="card">
             <div className="flex items-start justify-between gap-2">
@@ -318,7 +341,7 @@ function StudentsPageInner() {
               )}
             </div>
 
-            <Link href={`/visits/new?student=${s.id}`} className="btn btn--ghost btn--sm w-full mt-4">
+            <Link href={`/visits/new?student=${s.id}`} prefetch={false} className="btn btn--ghost btn--sm w-full mt-4">
               <Stethoscope className="ico" /> Catat Kunjungan
             </Link>
           </div>
@@ -326,8 +349,19 @@ function StudentsPageInner() {
       </div>
 
       {open && (
+        <ModalPortal>
         <div className="overlay" onClick={() => setOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={editing ? 'Edit siswa' : 'Tambah siswa'}>
+          <form
+            className="sheet"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={editing ? 'Edit siswa' : 'Tambah siswa'}
+          >
             <div className="sheet__head">
               <div>
                 <div className="sheet__title">{editing ? 'Edit Data Siswa' : 'Tambah Siswa'}</div>
@@ -419,12 +453,13 @@ function StudentsPageInner() {
               <button type="button" className="btn btn--ghost" onClick={() => setOpen(false)}>
                 Batal
               </button>
-              <button type="button" className="btn btn--primary" onClick={save} disabled={saving}>
+              <button type="submit" className="btn btn--primary" disabled={saving}>
                 <Save className="ico" /> {saving ? 'Menyimpan…' : 'Simpan'}
               </button>
             </div>
-          </div>
+          </form>
         </div>
+        </ModalPortal>
       )}
     </AppShell>
   );

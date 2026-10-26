@@ -1,7 +1,14 @@
 'use client';
 
 import React, { useEffect, useRef, useMemo } from 'react';
-import * as echarts from 'echarts';
+import * as echarts from 'echarts/core';
+import type { ECharts as EChartsInstance } from 'echarts/core';
+import type { EChartsOption, SeriesOption } from 'echarts';
+import { LineChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent } from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+
+echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
 export type ChartConfig = Record<
   string,
@@ -21,7 +28,7 @@ export interface EChartsAreaChartProps {
   xDataKey: string;
   className?: string;
   curveType?: 'monotone' | 'linear' | 'step';
-  chartOptions?: echarts.EChartsOption;
+  chartOptions?: EChartsOption;
   children?: React.ReactNode;
   height?: number | string;
 }
@@ -90,7 +97,7 @@ export function EChartsAreaChart({
   height = '100%',
 }: EChartsAreaChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartInstanceRef = useRef<echarts.ECharts | null>(null);
+  const chartInstanceRef = useRef<EChartsInstance | null>(null);
 
   // Extract Area children configurations
   const areaConfigs = useMemo(() => {
@@ -129,7 +136,7 @@ export function EChartsAreaChart({
     const chart = chartInstanceRef.current;
     const xCategories = data.map((item) => String(item[xDataKey] ?? ''));
 
-    const seriesList: echarts.SeriesOption[] = areaConfigs.map((area, idx) => {
+    const seriesList: SeriesOption[] = areaConfigs.map((area, idx) => {
       const cfg = config[area.dataKey];
       const colors = isDark ? cfg?.colors?.dark : cfg?.colors?.light;
       const primaryColor =
@@ -193,7 +200,7 @@ export function EChartsAreaChart({
       };
     });
 
-    const defaultOptions: echarts.EChartsOption = {
+    const defaultOptions: EChartsOption = {
       backgroundColor: 'transparent',
       animation: true,
       animationDuration: 1200,

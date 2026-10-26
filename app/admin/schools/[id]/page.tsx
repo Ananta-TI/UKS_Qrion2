@@ -50,7 +50,7 @@ export default async function SchoolDetailPage({
     <>
       <div className="adm__head">
         <div>
-          <Link href="/admin" className="adm__back">
+          <Link href="/admin" prefetch={false} className="adm__back">
             <ArrowLeft className="ico" /> Kembali ke daftar
           </Link>
           <h1>

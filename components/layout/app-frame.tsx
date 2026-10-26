@@ -106,7 +106,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
       <div className={pathname.startsWith('/settings') ? 'app app--settings' : 'app'}>
         <header className="top">
-          <Link className="brand" href="/" aria-label="UKS — Dashboard">
+          <Link className="brand" href="/" prefetch={false} aria-label="UKS — Dashboard">
             <span className="brand__mark" aria-hidden="true">
               <HeartPulse />
             </span>
@@ -126,6 +126,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                     <Link
                       key={t.href}
                       href={t.href}
+                      prefetch={false}
                       className={active ? 'ttab is-active' : 'ttab'}
                       aria-current={active ? 'page' : undefined}
                     >
@@ -197,6 +198,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                         <Link
                           key={item.href}
                           href={item.href}
+                          prefetch={false}
                           role="menuitem"
                           className="addmenu__item"
                           onClick={() => setAddOpen(false)}
@@ -222,6 +224,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
             <span className="dock__sep" aria-hidden="true" />
             <Link
               href="/support"
+              prefetch={false}
               className="dock__btn"
               aria-label="Bantuan"
               aria-current={pathname.startsWith('/support') ? 'page' : undefined}
@@ -234,6 +237,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
             </Link>
             <Link
               href="/settings"
+              prefetch={false}
               className="dock__btn"
               aria-label="Pengaturan"
               aria-current={pathname.startsWith('/settings') ? 'page' : undefined}
@@ -244,10 +248,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               <Settings className="ico" strokeWidth={1.7} />
               <span className="dock__tip">Pengaturan</span>
             </Link>
-            <Link href="/auth/signout" className="dock__btn" aria-label="Keluar">
-              <LogOut className="ico" strokeWidth={1.7} />
-              <span className="dock__tip">Keluar</span>
-            </Link>
+            <form action="/auth/signout" method="post" className="dock__form">
+              <button type="submit" className="dock__btn" aria-label="Keluar">
+                <LogOut className="ico" strokeWidth={1.7} />
+                <span className="dock__tip">Keluar</span>
+              </button>
+            </form>
           </nav>
         </LayoutGroup>
 
