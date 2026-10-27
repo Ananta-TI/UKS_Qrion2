@@ -6,22 +6,18 @@ import { usePathname } from 'next/navigation';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { CommandPalette } from '@/components/layout/command-palette';
 import { SettingsRail } from '@/components/layout/settings-rail';
-import { savePreferences } from '@/app/(app)/settings/preferences-actions';
 import {
   LayoutDashboard,
   Users,
   Stethoscope,
   Package,
   BarChart3,
-  SunMoon,
   LogOut,
-  Bell,
   HeartPulse,
   Search,
   Plus,
   LifeBuoy,
   Settings,
-  UserRound,
   Pill,
 } from 'lucide-react';
 
@@ -37,7 +33,6 @@ const tabs = [
 
 const addItems = [
   { href: '/visits/new', label: 'Catat Kunjungan', desc: 'Rekam medis harian', icon: Stethoscope },
-  { href: '/students?add=1', label: 'Tambah Siswa', desc: 'Daftarkan siswa baru', icon: UserRound },
   { href: '/inventory?add=1', label: 'Tambah Obat', desc: 'Stok inventaris UKS', icon: Pill },
 ];
 
@@ -45,16 +40,6 @@ function isActive(pathname: string, href: string) {
   if (href === '/') return pathname === '/';
   return pathname === href || pathname.startsWith(href + '/');
 }
-
-function toggleTheme() {
-  const root = document.documentElement;
-  const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
-  root.dataset.theme = next;
-  root.dataset.themePref = next;
-  // Simpan ke akun yang sedang login, bukan ke browser bersama.
-  void savePreferences({ theme: next });
-}
-
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -148,9 +133,6 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </LayoutGroup>
 
           <div className="top__tools">
-            <button type="button" className="ibtn ibtn--glass" aria-label="Notifikasi">
-              <Bell className="ico" strokeWidth={1.7} />
-            </button>
             <button type="button" className="me" aria-label="Menu akun">
               <span className="av av--md av--sky">AD</span>
             </button>
@@ -217,10 +199,6 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 )}
               </AnimatePresence>
             </div>
-            <button type="button" className="dock__btn" onClick={toggleTheme} aria-label="Ganti tema">
-              <SunMoon className="ico" strokeWidth={1.7} />
-              <span className="dock__tip">Tema</span>
-            </button>
             <span className="dock__sep" aria-hidden="true" />
             <Link
               href="/support"

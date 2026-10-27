@@ -27,7 +27,7 @@ const categories = [
   { id: 'kunjungan', label: 'Kunjungan', desc: 'Pemeriksaan & tindakan', icon: Stethoscope },
   { id: 'inventaris', label: 'Inventaris', desc: 'Stok obat & kedaluwarsa', icon: Package },
   { id: 'laporan', label: 'Laporan', desc: 'Statistik & export', icon: BarChart3 },
-  { id: 'akun', label: 'Akun & Akses', desc: 'Login, password, tema', icon: ShieldCheck },
+  { id: 'akun', label: 'Akun & Akses', desc: 'Login, password, akses', icon: ShieldCheck },
   { id: 'sekolah', label: 'Multi-sekolah', desc: 'Isolasi data & super admin', icon: Building2 },
 ] satisfies { id: CategoryId; label: string; desc: string; icon: typeof Users }[];
 
@@ -89,13 +89,6 @@ const faqs: Faq[] = [
     keywords: 'back to class referred picked up rujukan pulang',
   },
   {
-    id: 'tema',
-    category: 'akun',
-    q: 'Bagaimana mengganti tema terang atau gelap?',
-    a: 'Klik ikon Tema pada dock atau buka Pengaturan → Tampilan. Pilihan tema disimpan di akun Anda, jadi setiap pengguna punya tampilannya sendiri.',
-    keywords: 'dark mode gelap terang tampilan',
-  },
-  {
     id: 'lupa-password',
     category: 'akun',
     q: 'Lupa password atau butuh akun baru?',
@@ -103,11 +96,11 @@ const faqs: Faq[] = [
     keywords: 'reset login akun akses',
   },
   {
-    id: 'tambah-siswa',
+    id: 'kelola-siswa',
     category: 'siswa',
-    q: 'Bagaimana menambah, mengubah, atau menghapus siswa?',
-    a: 'Buka halaman Siswa lalu klik Tambah Siswa. Gunakan ikon pensil untuk mengubah data dan ikon tempat sampah untuk menghapus. Menghapus siswa juga menghapus seluruh riwayat kunjungannya, jadi pastikan data sudah benar.',
-    keywords: 'tambah edit ubah hapus crud murid',
+    q: 'Bagaimana mengubah atau menghapus data siswa?',
+    a: 'Buka halaman Siswa, lalu gunakan ikon pensil untuk mengubah data dan ikon tempat sampah untuk menghapus. Menghapus siswa juga menghapus seluruh riwayat kunjungannya, jadi pastikan data sudah benar.',
+    keywords: 'edit ubah hapus crud murid',
     links: [{ label: 'Kelola data siswa', href: '/students' }],
   },
   {

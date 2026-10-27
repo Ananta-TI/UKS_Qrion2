@@ -1,4 +1,4 @@
-import { Bell, Building2, Download, Plug, ShieldCheck, SunMoon } from 'lucide-react';
+import { Building2, Download, ShieldCheck } from 'lucide-react';
 
 export const settingsNav = [
   {
@@ -13,24 +13,6 @@ export const settingsNav = [
     label: 'Pengguna & peran',
     desc: 'Siapa yang bisa melihat',
     icon: ShieldCheck,
-  },
-  {
-    href: '/settings/notifications',
-    label: 'Notifikasi',
-    desc: 'Apa yang masuk ke lonceng',
-    icon: Bell,
-  },
-  {
-    href: '/settings/appearance',
-    label: 'Tampilan',
-    desc: 'Tema, aksen, kerapatan',
-    icon: SunMoon,
-  },
-  {
-    href: '/settings/integrations',
-    label: 'Integrasi',
-    desc: 'Layanan & terminal',
-    icon: Plug,
   },
   {
     href: '/settings/data',

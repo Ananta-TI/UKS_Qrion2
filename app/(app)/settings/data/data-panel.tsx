@@ -7,14 +7,11 @@ import {
   FileJson,
   HardDrive,
   Loader2,
-  RotateCcw,
   ShieldCheck,
 } from 'lucide-react';
 import { CountUp } from '@/components/ui/count-up';
 import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
-import { defaultPreferences } from '@/lib/user-prefs';
-import { savePreferences } from '../preferences-actions';
 
 type Counts = {
   students: number | null;
@@ -108,31 +105,6 @@ export function DataPanel({ schoolId, schoolName }: { schoolId: string; schoolNa
     setExporting(false);
   }
 
-  async function resetPreferences() {
-    const confirmed = window.confirm(
-      'Kembalikan tema, aksen, kerapatan, kalender, dan preferensi notifikasi ke default? Data sekolah tidak dihapus.'
-    );
-    if (!confirmed) return;
-
-    try {
-      localStorage.removeItem('uks:notifications');
-    } catch {}
-
-    // Hanya preferensi akun ini yang direset, akun lain tidak terpengaruh.
-    const result = await savePreferences(defaultPreferences);
-
-    const root = document.documentElement;
-    root.dataset.theme = 'light';
-    root.dataset.themePref = 'light';
-    root.dataset.accent = 'ocean';
-    root.dataset.density = 'comfortable';
-    setMessage(
-      result.ok
-        ? 'Preferensi akun ini dikembalikan ke default. Data sekolah tetap aman.'
-        : result.error ?? 'Preferensi gagal disimpan. Coba lagi.'
-    );
-  }
-
   return (
     <div className="set-grid">
       <div className="set-stack">
@@ -183,25 +155,10 @@ export function DataPanel({ schoolId, schoolName }: { schoolId: string; schoolNa
             <div className="card__title">
               <HardDrive className="ico" />
               <span>
-                Preferensi tampilan
-                <span className="card__sub">Tersimpan di akun Anda dan tidak memengaruhi data sekolah.</span>
+                Keamanan data
+                <span className="card__sub">Data sekolah hanya dapat diakses oleh akun yang berwenang.</span>
               </span>
             </div>
-          </div>
-
-          <div className="set-note set-note--danger">
-            <RotateCcw className="ico" />
-            <div>
-              <b>Kembalikan preferensi</b>
-              <p>
-                Tema, aksen, kerapatan, awal minggu, dan notifikasi dikembalikan ke default. Laporan tersimpan dan
-                seluruh data sekolah tidak dihapus.
-              </p>
-            </div>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={resetPreferences}>
-              <RotateCcw className="ico" />
-              Reset preferensi
-            </button>
           </div>
 
           <div className="note note--ok">
@@ -237,10 +194,6 @@ export function DataPanel({ schoolId, schoolName }: { schoolId: string; schoolNa
           <div className="set-fact">
             <b>Terpisah per sekolah</b>
             <small>Setiap kueri dibatasi oleh <code>school_id</code>.</small>
-          </div>
-          <div className="set-fact">
-            <b>Laporan tetap tersimpan</b>
-            <small>Reset preferensi tidak menyentuh laporan yang Anda simpan.</small>
           </div>
         </div>
 

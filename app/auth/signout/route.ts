@@ -1,6 +1,5 @@
 import { logActivity } from '@/lib/activity';
 import { getSessionProfile } from '@/lib/auth';
-import { PREFS_COOKIE } from '@/lib/preferences';
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -21,9 +20,7 @@ async function signOut(request: NextRequest) {
   const supabase = await createClient();
   await supabase.auth.signOut();
 
-  const response = NextResponse.redirect(new URL('/auth/signin', request.url));
-  response.cookies.delete(PREFS_COOKIE);
-  return response;
+  return NextResponse.redirect(new URL('/auth/signin', request.url));
 }
 
 /** Logout normal hanya lewat POST agar tidak terpicu prefetch link. */

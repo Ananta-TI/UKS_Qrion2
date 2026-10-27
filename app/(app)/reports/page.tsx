@@ -32,12 +32,15 @@ const ReportAreaChart = dynamic(() => import('@/components/charts/report-area-ch
 const pillSpring = { type: 'spring', stiffness: 380, damping: 32, mass: 0.7 } as const;
 
 const ranges = [
+  { key: '7d', label: '7 hari', days: 7 },
   { key: '30d', label: '30 hari', days: 30 },
   { key: '3m', label: '3 bulan', days: 90 },
   { key: '6m', label: '6 bulan', days: 180 },
   { key: '12m', label: '12 bulan', days: 365 },
   { key: 'all', label: 'Semua', days: 0 },
 ] as const;
+
+const defaultRange = ranges.find((r) => r.key === '6m') ?? ranges[0];
 
 type RangeKey = (typeof ranges)[number]['key'];
 type Metric = 'visits' | 'students' | 'returned' | 'referred' | 'picked';
@@ -47,7 +50,7 @@ type Tab = 'overview' | 'builder';
 
 const metrics: { key: Metric; label: string; desc: string; icon: typeof ClipboardList }[] = [
   { key: 'visits', label: 'Kunjungan', desc: 'Jumlah kunjungan UKS', icon: ClipboardList },
-  { key: 'students', label: 'Siswa unik', desc: 'Siswa berbeda yang datang', icon: Users },
+  { key: 'students', label: 'Siswa berkunjung', desc: 'Siswa berbeda yang datang', icon: Users },
   { key: 'returned', label: 'Kembali ke kelas', desc: 'Siswa yang langsung belajar lagi', icon: CheckCircle2 },
   { key: 'referred', label: 'Rujukan', desc: 'Dirujuk ke faskes / RS', icon: AlertCircle },
   { key: 'picked', label: 'Dijemput', desc: 'Dijemput orang tua', icon: Stethoscope },
@@ -91,6 +94,36 @@ type SavedReport = {
 function monthKey(iso: string) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function dayKey(iso: string) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Tren 7 hari selalu menampilkan tujuh titik, termasuk hari tanpa kunjungan. */
+function buildDailyTrend(visits: VisitRow[], days: number): GroupDatum[] {
+  const buckets = new Map<string, GroupDatum>();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    const key = dayKey(date.toISOString());
+    buckets.set(key, {
+      key,
+      label: date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+      value: 0,
+    });
+  }
+
+  for (const visit of visits) {
+    const bucket = buckets.get(dayKey(visit.check_in_at));
+    if (bucket) bucket.value += 1;
+  }
+
+  return [...buckets.values()];
 }
 
 function buildGroups(visits: VisitRow[], groupBy: GroupBy, metric: Metric): GroupDatum[] {
@@ -262,7 +295,7 @@ export default function ReportsPage() {
   const supabase = createClient();
   const [visits, setVisits] = useState<VisitRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [range, setRange] = useState<RangeKey>('6m');
+  const [range, setRange] = useState<RangeKey>(defaultRange.key);
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('overview');
 
@@ -283,11 +316,13 @@ export default function ReportsPage() {
 
   async function load() {
     setLoading(true);
-    const selected = ranges.find((r) => r.key === range) ?? ranges[2];
+    const selected = ranges.find((r) => r.key === range) ?? defaultRange;
     let q = supabase.from('visits').select('*, students(*)').order('check_in_at', { ascending: false });
 
     if (selected.days > 0) {
-      const since = new Date(Date.now() - selected.days * 86400000);
+      const since = new Date();
+      since.setHours(0, 0, 0, 0);
+      since.setDate(since.getDate() - (selected.days - 1));
       q = q.gte('check_in_at', since.toISOString());
     }
 
@@ -302,7 +337,7 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
-  const rangeInfo = ranges.find((r) => r.key === range) ?? ranges[2];
+  const rangeInfo = ranges.find((r) => r.key === range) ?? defaultRange;
 
   const filtered = visits.filter((v) => {
     if (!query) return true;
@@ -323,10 +358,12 @@ export default function ReportsPage() {
   const returned = statusCounts['back_to_class'] ?? 0;
   const returnRate = total ? Math.round((returned / total) * 100) : 0;
 
-  const activeDays = new Set(filtered.map((v) => v.check_in_at.slice(0, 10))).size;
+  const activeDays = new Set(filtered.map((v) => dayKey(v.check_in_at))).size;
   const avgPerDay = activeDays ? total / activeDays : 0;
 
   const monthly = buildGroups(filtered, 'month', 'visits');
+  const trend = range === '7d' ? buildDailyTrend(filtered, 7) : monthly;
+  const trendTitle = range === '7d' ? 'Kunjungan per Hari' : 'Kunjungan per Bulan';
   const byClass = buildGroups(filtered, 'class', 'visits').slice(0, 8);
   const complaints = buildGroups(filtered, 'complaint', 'visits').slice(0, 6);
   const maxComplaint = Math.max(1, ...complaints.map((c) => c.value));
@@ -609,11 +646,11 @@ export default function ReportsPage() {
             <div className="card">
               <div className="card__head">
                 <h2 className="card__title">
-                  <BarChart3 className="ico" /> Kunjungan per Bulan
+                  <BarChart3 className="ico" /> {trendTitle}
                 </h2>
                 <span className="rpt__datepill">{rangeInfo.label}</span>
               </div>
-              <AreaChart data={monthly} id="rpt-area-overview" />
+              <AreaChart data={trend} id="rpt-area-overview" />
             </div>
 
             <div className="card">

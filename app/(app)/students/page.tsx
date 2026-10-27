@@ -1,9 +1,8 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
 import { AppShell } from '@/components/layout/app-shell';
@@ -16,7 +15,6 @@ import {
   Pill,
   UserRound,
   Stethoscope,
-  Plus,
   Pencil,
   Trash2,
   Save,
@@ -42,15 +40,6 @@ type FormState = {
   chronic_diseases: string;
 };
 
-const emptyForm: FormState = {
-  nis: '',
-  full_name: '',
-  class: '',
-  blood_type: '',
-  allergies: '',
-  chronic_diseases: '',
-};
-
 const tones = ['av--sky', 'av--teal', 'av--coral', 'av--amber', 'av--rose', 'av--plum', 'av--iris'];
 
 /** Modal dirender di body agar tidak terkurung ancestor yang punya transform. */
@@ -58,10 +47,8 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body);
 }
 
-function StudentsPageInner() {
+export default function StudentsPage() {
   const supabase = createClient();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [students, setStudents] = useState<StudentRow[]>([]);
@@ -70,16 +57,17 @@ function StudentsPageInner() {
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<StudentRow | null>(null);
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>({
+    nis: '',
+    full_name: '',
+    class: '',
+    blood_type: '',
+    allergies: '',
+    chronic_diseases: '',
+  });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (searchParams.get('add') !== '1') return;
-    openCreate();
-    router.replace('/students', { scroll: false });
-  }, [searchParams, router]);
 
   useEffect(() => {
     if (!open) return;
@@ -127,13 +115,6 @@ function StudentsPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, reloadKey]);
 
-  function openCreate() {
-    setEditing(null);
-    setForm(emptyForm);
-    setFormError(null);
-    setOpen(true);
-  }
-
   function openEdit(s: StudentRow) {
     setEditing(s);
     setForm({
@@ -157,6 +138,8 @@ function StudentsPageInner() {
       return;
     }
 
+    if (!editing) return;
+
     setSaving(true);
     setFormError(null);
 
@@ -169,10 +152,12 @@ function StudentsPageInner() {
       chronic_diseases: form.chronic_diseases.trim(),
     };
 
-    const isEdit = Boolean(editing);
-    const { data: saved, error } = isEdit
-      ? await supabase.from('students').update(payload).eq('id', editing!.id).select('id').single()
-      : await supabase.from('students').insert(payload).select('id').single();
+    const { data: saved, error } = await supabase
+      .from('students')
+      .update(payload)
+      .eq('id', editing.id)
+      .select('id')
+      .single();
 
     setSaving(false);
 
@@ -180,20 +165,20 @@ function StudentsPageInner() {
       const duplicate = error.message.includes('duplicate key') || error.message.includes('students_school_nis_key');
       const msg = duplicate ? 'NIS sudah digunakan oleh siswa lain di sekolah ini.' : error.message;
       setFormError(msg);
-      toast.error(msg, isEdit ? 'Gagal Memperbarui Siswa' : 'Gagal Menambah Siswa');
+      toast.error(msg, 'Gagal Memperbarui Siswa');
       return;
     }
 
     await logClientActivity({
-      action: isEdit ? 'update' : 'create',
+      action: 'update',
       entity: 'student',
-      entityId: (saved as { id: string } | null)?.id ?? editing?.id ?? null,
-      summary: isEdit ? `Memperbarui data siswa ${fullName}` : `Menambahkan siswa ${fullName}`,
+      entityId: (saved as { id: string } | null)?.id ?? editing.id,
+      summary: `Memperbarui data siswa ${fullName}`,
       metadata: { nis, class: payload.class },
     });
 
     setOpen(false);
-    toast.success(isEdit ? `Data ${fullName} berhasil diperbarui.` : `Siswa ${fullName} berhasil ditambahkan.`);
+    toast.success(`Data ${fullName} berhasil diperbarui.`);
     setReloadKey((k) => k + 1);
   }
 
@@ -229,14 +214,9 @@ function StudentsPageInner() {
       title="Data Siswa"
       crumbs={[{ label: 'UKS', href: '/' }, { label: 'Siswa' }]}
       actions={
-        <div className="flex items-center gap-2">
-          <Link href="/visits/new" prefetch={false} className="btn btn--ghost">
-            <Stethoscope className="ico" /> Catat Kunjungan
-          </Link>
-          <button type="button" className="btn btn--primary" onClick={openCreate}>
-            <Plus className="ico" /> Tambah Siswa
-          </button>
-        </div>
+        <Link href="/visits/new" prefetch={false} className="btn btn--ghost">
+          <Stethoscope className="ico" /> Catat Kunjungan
+        </Link>
       }
     >
       <div className="toolbar">
@@ -268,13 +248,8 @@ function StudentsPageInner() {
             <div className="empty__text">
               {query
                 ? 'Periksa ejaan nama atau NIS, lalu coba lagi.'
-                : 'Tambahkan siswa terlebih dahulu agar bisa dicari dan dicatat kunjungannya.'}
+                : 'Data siswa belum tersedia. Hubungi admin sekolah untuk menambahkan data.'}
             </div>
-            {!query && (
-              <button type="button" className="btn btn--primary btn--sm" onClick={openCreate}>
-                <Plus className="ico" /> Tambah Siswa
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -360,11 +335,11 @@ function StudentsPageInner() {
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label={editing ? 'Edit siswa' : 'Tambah siswa'}
+            aria-label="Edit siswa"
           >
             <div className="sheet__head">
               <div>
-                <div className="sheet__title">{editing ? 'Edit Data Siswa' : 'Tambah Siswa'}</div>
+                <div className="sheet__title">Edit Data Siswa</div>
                 <div className="sheet__sub">Data ini dipakai saat mencatat kunjungan UKS.</div>
               </div>
               <button type="button" className="ibtn" onClick={() => setOpen(false)} aria-label="Tutup">
@@ -462,13 +437,5 @@ function StudentsPageInner() {
         </ModalPortal>
       )}
     </AppShell>
-  );
-}
-
-export default function StudentsPage() {
-  return (
-    <Suspense fallback={null}>
-      <StudentsPageInner />
-    </Suspense>
   );
 }
