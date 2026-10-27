@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
@@ -13,7 +14,6 @@ import {
   Package,
   BarChart3,
   LogOut,
-  HeartPulse,
   Search,
   Plus,
   LifeBuoy,
@@ -154,14 +154,14 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
         >
           <Menu className="ico" strokeWidth={1.8} />
         </button>
-        <Link className="brand mobilebar__brand" href="/" prefetch={false} aria-label="UKS — Dashboard">
-          <span className="brand__mark" aria-hidden="true">
-            <HeartPulse />
-          </span>
-          <span className="brand__text">
-            <b>UKS</b>
-            <small>Sehat Sekolah</small>
-          </span>
+        <Link className="brand brand--logo mobilebar__brand" href="/" prefetch={false} aria-label="UKS — Dashboard">
+          <Image
+            src="/qrion-logo2.png"
+            alt="Qrion"
+            width={1081}
+            height={347}
+            className="brand__img"
+          />
         </Link>
         <button
           type="button"
@@ -194,14 +194,15 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
       >
         <div className="sidebar__inner">
           <div className="sidebar__head">
-            <Link className="brand" href="/" prefetch={false} aria-label="UKS — Dashboard">
-              <span className="brand__mark" aria-hidden="true">
-                <HeartPulse />
-              </span>
-              <span className="brand__text">
-                <b>UKS</b>
-                <small>Sehat Sekolah</small>
-              </span>
+            <Link className="brand brand--logo" href="/" prefetch={false} aria-label="UKS — Dashboard">
+              <Image
+                src="/qrion-logo2.png"
+                alt="Qrion"
+                width={1081}
+                height={347}
+                preload
+                className="brand__img"
+              />
             </Link>
             <button
               type="button"

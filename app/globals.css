@@ -123,6 +123,8 @@ small { font-size: var(--fs-xs); }
 .brand__text { min-width: 0; line-height: 1.1; display: grid; }
 .brand__text b { letter-spacing: -.02em; font-size: 21px; font-weight: 700; }
 .brand__text small { font-size: var(--fs-2xs); color: var(--muted); white-space: nowrap; font-weight: 600; }
+.brand--logo { min-height: 0; }
+.brand__img { display: block; width: auto; height: 50px; max-width: 100%; }
 
 .ibtn { border: 1px solid var(--line-2); width: 40px; height: 40px; color: var(--text); background: 0 0; border-radius: 50%; flex: none; place-items: center; display: inline-grid; position: relative; }
 .ibtn:hover { background: var(--well); }
@@ -460,9 +462,7 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
     backdrop-filter: var(--glass-blur);
   }
   .mobilebar__brand { flex: 1; justify-content: center; min-width: 0; }
-  .mobilebar__brand .brand__mark { width: 36px; height: 36px; border-radius: 12px; }
-  .mobilebar__brand .brand__mark svg { width: 20px; height: 20px; }
-  .mobilebar__brand .brand__text b { font-size: 18px; }
+  .mobilebar__brand .brand__img { height: 38px; }
   .sidebar {
     z-index: 60;
     top: 0;
