@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { AppFrame } from '@/components/layout/app-frame';
-import { getSessionProfile, schoolIsActive } from '@/lib/auth';
+import { getSessionProfile, profileSchool, schoolIsActive } from '@/lib/auth';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { profile } = await getSessionProfile();
@@ -9,5 +9,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (profile.role === 'super_admin') redirect('/admin');
   if (!schoolIsActive(profile)) redirect('/auth/signout?reason=inactive');
 
-  return <AppFrame>{children}</AppFrame>;
+  const school = profileSchool(profile);
+  const name = profile.full_name?.trim() || profile.email || 'Petugas UKS';
+  const role = profile.role === 'school_admin' ? 'Admin sekolah' : 'Petugas UKS';
+
+  return (
+    <AppFrame user={{ name, role, school: school?.name ?? null }}>{children}</AppFrame>
+  );
 }

@@ -19,6 +19,9 @@ import {
   LifeBuoy,
   Settings,
   Pill,
+  Menu,
+  X,
+  ChevronDown,
 } from 'lucide-react';
 
 const pillSpring = { type: 'spring', stiffness: 380, damping: 32, mass: 0.7 } as const;
@@ -31,26 +34,50 @@ const tabs = [
   { href: '/reports', label: 'Laporan', icon: BarChart3 },
 ];
 
+const utilityTabs = [
+  { href: '/support', label: 'Bantuan', icon: LifeBuoy },
+  { href: '/settings', label: 'Pengaturan', icon: Settings },
+];
+
 const addItems = [
   { href: '/visits/new', label: 'Catat Kunjungan', desc: 'Rekam medis harian', icon: Stethoscope },
   { href: '/inventory?add=1', label: 'Tambah Obat', desc: 'Stok inventaris UKS', icon: Pill },
 ];
+
+export type AppFrameUser = {
+  name: string;
+  role: string;
+  school: string | null;
+};
 
 function isActive(pathname: string, href: string) {
   if (href === '/') return pathname === '/';
   return pathname === href || pathname.startsWith(href + '/');
 }
 
-export function AppFrame({ children }: { children: React.ReactNode }) {
+function initialsOf(name: string) {
+  const letters = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0))
+    .join('');
+  return letters.toUpperCase() || 'UK';
+}
+
+export function AppFrame({ children, user }: { children: React.ReactNode; user: AppFrameUser }) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const addRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        setDrawerOpen(false);
         setPaletteOpen((v) => !v);
       }
     };
@@ -61,6 +88,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAddOpen(false);
+    setDrawerOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -81,6 +109,32 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     };
   }, [addOpen]);
 
+  useEffect(() => {
+    if (!drawerOpen) return;
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawerOpen(false);
+    };
+    const onResize = () => {
+      if (window.innerWidth > 1099) setDrawerOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [drawerOpen]);
+
+  function openPalette() {
+    setDrawerOpen(false);
+    setPaletteOpen(true);
+  }
+
   return (
     <>
       <div className="mesh" aria-hidden="true">
@@ -89,21 +143,86 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         <i className="mesh__c" />
       </div>
 
-      <div className={pathname.startsWith('/settings') ? 'app app--settings' : 'app'}>
-        <header className="top">
-          <Link className="brand" href="/" prefetch={false} aria-label="UKS — Dashboard">
-            <span className="brand__mark" aria-hidden="true">
-              <HeartPulse />
-            </span>
-            <span className="brand__text">
-              <b>UKS</b>
-              <small>Sehat Sekolah</small>
-            </span>
-          </Link>
+      <header className="mobilebar">
+        <button
+          type="button"
+          className="mobilebar__icon"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Buka menu"
+          aria-expanded={drawerOpen}
+          aria-controls="app-sidebar"
+        >
+          <Menu className="ico" strokeWidth={1.8} />
+        </button>
+        <Link className="brand mobilebar__brand" href="/" prefetch={false} aria-label="UKS — Dashboard">
+          <span className="brand__mark" aria-hidden="true">
+            <HeartPulse />
+          </span>
+          <span className="brand__text">
+            <b>UKS</b>
+            <small>Sehat Sekolah</small>
+          </span>
+        </Link>
+        <button
+          type="button"
+          className="mobilebar__icon"
+          onClick={openPalette}
+          aria-label="Cari (Ctrl+K)"
+        >
+          <Search className="ico" strokeWidth={1.8} />
+        </button>
+      </header>
 
-          <LayoutGroup id="top-tabs">
-            <nav className="ttabs" aria-label="Navigasi utama">
-              <div className="ttabs__track">
+      <AnimatePresence>
+        {drawerOpen && (
+          <motion.div
+            className="sidebar__scrim"
+            aria-hidden="true"
+            onClick={() => setDrawerOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+          />
+        )}
+      </AnimatePresence>
+
+      <aside
+        id="app-sidebar"
+        className={drawerOpen ? 'sidebar is-open' : 'sidebar'}
+        aria-label="Navigasi aplikasi"
+      >
+        <div className="sidebar__inner">
+          <div className="sidebar__head">
+            <Link className="brand" href="/" prefetch={false} aria-label="UKS — Dashboard">
+              <span className="brand__mark" aria-hidden="true">
+                <HeartPulse />
+              </span>
+              <span className="brand__text">
+                <b>UKS</b>
+                <small>Sehat Sekolah</small>
+              </span>
+            </Link>
+            <button
+              type="button"
+              className="sidebar__close"
+              onClick={() => setDrawerOpen(false)}
+              aria-label="Tutup menu"
+            >
+              <X className="ico" strokeWidth={1.8} />
+            </button>
+          </div>
+
+          <div className="sidebar__scroll">
+            <button type="button" className="side-search" onClick={openPalette} aria-label="Cari (Ctrl+K)">
+              <Search className="ico" strokeWidth={1.7} />
+              <span>Cari apa saja</span>
+              <kbd>Ctrl K</kbd>
+            </button>
+
+            <LayoutGroup id="app-nav">
+              <nav className="sidenav" aria-label="Navigasi utama">
+                <p className="sidenav__label">Menu</p>
                 {tabs.map((t) => {
                   const Icon = t.icon;
                   const active = isActive(pathname, t.href);
@@ -112,129 +231,145 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                       key={t.href}
                       href={t.href}
                       prefetch={false}
-                      className={active ? 'ttab is-active' : 'ttab'}
+                      className="sidenav__item"
                       aria-current={active ? 'page' : undefined}
+                      onClick={() => setDrawerOpen(false)}
                     >
                       {active && (
                         <motion.span
-                          layoutId="tab-pill"
-                          className="ttab__pill"
+                          layoutId="app-nav-pill"
+                          className="sidenav__pill"
                           transition={pillSpring}
                           initial={false}
                         />
                       )}
-                      <Icon className="ico" strokeWidth={1.7} />
-                      <span>{t.label}</span>
+                      <span className="sidenav__ico">
+                        <Icon className="ico" strokeWidth={1.7} />
+                      </span>
+                      <span className="sidenav__text">{t.label}</span>
+                      {active && <span className="sidenav__dot" aria-hidden="true" />}
                     </Link>
                   );
                 })}
+              </nav>
+
+              <div className="sideadd" ref={addRef}>
+                <button
+                  type="button"
+                  className={addOpen ? 'sideadd__toggle is-open' : 'sideadd__toggle'}
+                  onClick={() => setAddOpen((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={addOpen}
+                >
+                  <span className="sideadd__ico">
+                    <Plus className="ico" strokeWidth={1.8} />
+                  </span>
+                  <span className="sideadd__text">
+                    <b>Tambah data</b>
+                    <small>Kunjungan atau obat</small>
+                  </span>
+                  <ChevronDown className="ico sideadd__chev" strokeWidth={1.8} />
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {addOpen && (
+                    <motion.div
+                      className="sideadd__menu"
+                      role="menu"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.18, ease: 'easeOut' }}
+                    >
+                      <div className="sideadd__menuInner">
+                        {addItems.map((item) => {
+                          const Icon = item.icon;
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              prefetch={false}
+                              role="menuitem"
+                              className="sideadd__item"
+                              onClick={() => {
+                                setAddOpen(false);
+                                setDrawerOpen(false);
+                              }}
+                            >
+                              <span className="sideadd__itemIco">
+                                <Icon className="ico" strokeWidth={1.7} />
+                              </span>
+                              <span className="sideadd__itemText">
+                                <b>{item.label}</b>
+                                <small>{item.desc}</small>
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            </nav>
-          </LayoutGroup>
 
-          <div className="top__tools">
-            <button type="button" className="me" aria-label="Menu akun">
-              <span className="av av--md av--sky">AD</span>
-            </button>
+              <nav className="sidenav sidenav--utility" aria-label="Bantuan dan pengaturan">
+                <p className="sidenav__label">Lainnya</p>
+                {utilityTabs.map((t) => {
+                  const Icon = t.icon;
+                  const active = isActive(pathname, t.href);
+                  return (
+                    <Link
+                      key={t.href}
+                      href={t.href}
+                      prefetch={false}
+                      className="sidenav__item"
+                      aria-current={active ? 'page' : undefined}
+                      onClick={() => setDrawerOpen(false)}
+                    >
+                      {active && (
+                        <motion.span
+                          layoutId="app-nav-pill"
+                          className="sidenav__pill"
+                          transition={pillSpring}
+                          initial={false}
+                        />
+                      )}
+                      <span className="sidenav__ico">
+                        <Icon className="ico" strokeWidth={1.7} />
+                      </span>
+                      <span className="sidenav__text">{t.label}</span>
+                      {active && <span className="sidenav__dot" aria-hidden="true" />}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </LayoutGroup>
           </div>
-        </header>
 
-        <LayoutGroup id="dock">
-          <nav className="dock" aria-label="Aksi cepat">
-            <button
-              type="button"
-              className="dock__btn"
-              onClick={() => setPaletteOpen(true)}
-              aria-label="Cari (Ctrl+K)"
-            >
-              <Search className="ico" strokeWidth={1.7} />
-              <span className="dock__tip">Cari · Ctrl K</span>
-            </button>
-            <div className="dock__add" ref={addRef}>
-              <button
-                type="button"
-                className={addOpen ? 'dock__btn is-open' : 'dock__btn'}
-                onClick={() => setAddOpen((v) => !v)}
-                aria-label="Tambah data"
-                aria-haspopup="menu"
-                aria-expanded={addOpen}
-              >
-                <Plus className="ico" strokeWidth={1.7} />
-                <span className="dock__tip">Tambah data</span>
-              </button>
-
-              <AnimatePresence>
-                {addOpen && (
-                  <motion.div
-                    className="addmenu"
-                    role="menu"
-                    initial={{ opacity: 0, y: 6, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 6, scale: 0.97 }}
-                    transition={{ duration: 0.16, ease: 'easeOut' }}
-                  >
-                    <div className="addmenu__head">Tambah baru</div>
-                    {addItems.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          prefetch={false}
-                          role="menuitem"
-                          className="addmenu__item"
-                          onClick={() => setAddOpen(false)}
-                        >
-                          <span className="addmenu__ico">
-                            <Icon className="ico" strokeWidth={1.7} />
-                          </span>
-                          <span className="addmenu__text">
-                            <b>{item.label}</b>
-                            <small>{item.desc}</small>
-                          </span>
-                        </Link>
-                      );
-                    })}
-                  </motion.div>
+          <div className="sidebar__foot">
+            <div className="sideuser">
+              <span className="av av--md av--iris">{initialsOf(user.name)}</span>
+              <span className="sideuser__text">
+                <b title={user.name}>{user.name}</b>
+                <small>{user.role}</small>
+                {user.school && (
+                  <span className="sideuser__school" title={user.school}>
+                    {user.school}
+                  </span>
                 )}
-              </AnimatePresence>
+              </span>
             </div>
-            <span className="dock__sep" aria-hidden="true" />
-            <Link
-              href="/support"
-              prefetch={false}
-              className="dock__btn"
-              aria-label="Bantuan"
-              aria-current={pathname.startsWith('/support') ? 'page' : undefined}
-            >
-              {pathname.startsWith('/support') && (
-                <motion.span layoutId="dock-pill" className="dock__pill" transition={pillSpring} initial={false} />
-              )}
-              <LifeBuoy className="ico" strokeWidth={1.7} />
-              <span className="dock__tip">Bantuan</span>
-            </Link>
-            <Link
-              href="/settings"
-              prefetch={false}
-              className="dock__btn"
-              aria-label="Pengaturan"
-              aria-current={pathname.startsWith('/settings') ? 'page' : undefined}
-            >
-              {pathname.startsWith('/settings') && (
-                <motion.span layoutId="dock-pill" className="dock__pill" transition={pillSpring} initial={false} />
-              )}
-              <Settings className="ico" strokeWidth={1.7} />
-              <span className="dock__tip">Pengaturan</span>
-            </Link>
-            <form action="/auth/signout" method="post" className="dock__form">
-              <button type="submit" className="dock__btn" aria-label="Keluar">
+            <form action="/auth/signout" method="post" className="sidebar__outform">
+              <button type="submit" className="sidebar__out">
                 <LogOut className="ico" strokeWidth={1.7} />
-                <span className="dock__tip">Keluar</span>
+                <span>Keluar</span>
               </button>
             </form>
-          </nav>
-        </LayoutGroup>
+          </div>
+        </div>
+      </aside>
 
+      <div className={pathname.startsWith('/settings') ? 'app app--settings' : 'app'}>
         <main className="main">
           {pathname.startsWith('/settings') && <SettingsRail />}
           {children}
