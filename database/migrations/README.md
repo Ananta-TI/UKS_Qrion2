@@ -15,12 +15,15 @@ di Supabase → SQL Editor:
 | 5 | `005_default_medicines.sql` | Seeder obat bawaan untuk setiap sekolah baru + backfill sekolah lama. |
 | 6 | `006_stock_opname.sql` | RPC `apply_stock_opname()` untuk penyesuaian stok hasil opname. |
 | 7 | `007_tenant_isolation_test.sql` | Fungsi `tenant_isolation_report()` untuk memverifikasi isolasi antar-sekolah. |
+| 8 | `008_stock_restock.sql` | RPC atomik `restock_medicine()` untuk menambah stok (log + batch sekaligus). |
 
 ## Catatan kompatibilitas
 
 Aplikasi tetap berjalan walau migrasi belum dijalankan:
 
 - Pemotongan stok memakai RPC `dispense_medicines` bila tersedia, dan otomatis
+  **jatuh ke mode compare-and-set** lama bila RPC belum ada.
+- Penambahan stok memakai RPC `restock_medicine` bila tersedia, dan otomatis
   **jatuh ke mode compare-and-set** lama bila RPC belum ada.
 - Tabel `medicine_batches` dan `saved_reports` opsional — fitur terkait hanya
   muncul setelah tabel tersedia.

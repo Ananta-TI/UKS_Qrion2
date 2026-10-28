@@ -646,7 +646,7 @@ export default function ReportsPage() {
 
   const builderGroups = isMedicineMetric
     ? buildMedicineGroups(groupBy, metric)
-    : buildGroups(visits, groupBy, metric);
+    : buildGroups(filtered, groupBy, metric);
   const areaDisabled = groupBy === 'complaint' || groupBy === 'medicine';
   const builderSignature = builderGroups.map((g) => `${g.key}:${g.value}`).join('|');
   const builderTotal = builderGroups.reduce((sum, g) => sum + g.value, 0);

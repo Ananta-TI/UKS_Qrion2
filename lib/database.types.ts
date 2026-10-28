@@ -15,6 +15,9 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+/** Peran akun di seluruh aplikasi (satu-satunya sumber). */
+export type Role = 'super_admin' | 'school_admin' | 'staff';
+
 export type SchoolRow = {
   id: string;
   name: string;
@@ -30,7 +33,7 @@ export type ProfileRow = {
   id: string;
   email: string | null;
   full_name: string | null;
-  role: 'super_admin' | 'school_admin' | 'staff';
+  role: Role;
   school_id: string | null;
   school: string | null;
   created_at: string | null;
@@ -201,6 +204,10 @@ export type Database = {
         Args: { p_medicine: string; p_counted: number; p_note?: string | null };
         Returns: Json;
       };
+      restock_medicine: {
+        Args: { p_medicine: string; p_qty: number; p_note?: string | null };
+        Returns: Json;
+      };
       seed_default_medicines: { Args: { p_school: string }; Returns: number };
     };
     Enums: Record<string, never>;
@@ -227,5 +234,14 @@ export type StockOpnameResult = {
   before?: number;
   after?: number;
   diff?: number;
+  error?: string;
+};
+
+/** Bentuk hasil RPC `restock_medicine`. */
+export type RestockResult = {
+  ok: boolean;
+  before?: number;
+  after?: number;
+  added?: number;
   error?: string;
 };

@@ -25,6 +25,7 @@ import { YearChart } from '@/components/dashboard/year-chart';
 import { getAuthUser, getSessionProfile } from '@/lib/auth';
 import { fetchAllRows } from '@/lib/supabase/paginate';
 import { visitStatusLabels } from '@/lib/visit-status';
+import { isExpiringSoon, isLowStock } from '@/lib/stock';
 
 type VisitRow = {
   id: string;
@@ -255,15 +256,13 @@ export default async function DashboardPage() {
   const referredToday = todayStatus.referred;
   const todayStatusTotal = Math.max(1, todayCount);
 
-  const lowStockAll = medicines.filter((medicine) => (medicine.stock ?? 0) <= (medicine.min_stock ?? 5));
+  const lowStockAll = medicines.filter((medicine) => isLowStock(medicine.stock, medicine.min_stock));
   const lowStock = [...lowStockAll]
     .sort((a, b) => (a.stock ?? 0) - (a.min_stock ?? 5) - ((b.stock ?? 0) - (b.min_stock ?? 5)))
     .slice(0, 5);
-  const expiringSoon = medicines.filter((medicine) => {
-    if (!medicine.expiry_date) return false;
-    const diff = new Date(medicine.expiry_date).getTime() - now.getTime();
-    return diff > 0 && diff <= 30 * 86400000;
-  }).length;
+  const expiringSoon = medicines.filter((medicine) =>
+    isExpiringSoon(medicine.expiry_date, now.getTime())
+  ).length;
 
   const funnel = [
     { label: visitStatusLabels.back_to_class, desc: 'ditangani di UKS', count: 0 },

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { LogIn, Building2, ShieldAlert, X } from 'lucide-react';
 
 interface ImpersonateButtonProps {
@@ -29,7 +30,8 @@ export function ImpersonateButton({
         <LogIn className="ico" /> Login
       </button>
 
-      {open && (
+      {open &&
+        createPortal(
         <div className="overlay" style={{ zIndex: 100 }}>
           <div
             className="sheet"
@@ -107,7 +109,8 @@ export function ImpersonateButton({
               </form>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

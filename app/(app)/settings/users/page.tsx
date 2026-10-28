@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { ArrowUpRight, Lock, Mail, ShieldCheck, UserRound } from 'lucide-react';
 import { getSessionProfile } from '@/lib/auth';
 import { SettingsShell } from '@/components/settings/settings-shell';
-import type { Role } from '@/types';
+import type { Role } from '@/lib/database.types';
 
 const roleLabel: Record<Role, string> = {
   super_admin: 'Super admin',

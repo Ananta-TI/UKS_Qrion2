@@ -1474,6 +1474,93 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
 .medpick__qty .ibtn { width: 32px; height: 32px; }
 .medpick__qty .ibtn .ico { width: 15px; height: 15px; }
 
+/* ============================================================
+   Mobile polish
+   Penyesuaian sentuhan untuk layar kecil: modal jadi bottom-sheet,
+   tabel lebih rapat, pencarian selebar baris, dan tinggi aman notch.
+   Semua aturan hanya aktif di lebar <= 760px sehingga tampilan
+   desktop tidak berubah.
+   ============================================================ */
+@media (width <= 760px) {
+  .app { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
+
+  /* --- Modal jadi bottom-sheet --- */
+  .overlay:not(.print-overlay) {
+    align-items: end;
+    padding: 0;
+    padding-top: max(10px, env(safe-area-inset-top));
+    background: #0e1a1c66;
+  }
+  .overlay:not(.print-overlay) > .sheet {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: calc(100dvh - max(10px, env(safe-area-inset-top)));
+    border-radius: 24px 24px 0 0;
+    border-bottom: 0;
+    animation: sheetUp .3s cubic-bezier(.22, 1, .36, 1) both;
+  }
+  @keyframes sheetUp {
+    from { transform: translateY(16px); opacity: .5; }
+    to { transform: none; opacity: 1; }
+  }
+  .sheet__head { padding: 18px 18px 0; }
+  .sheet__body { padding: 16px 18px; }
+  .sheet__foot {
+    position: sticky;
+    z-index: 1;
+    bottom: 0;
+    margin-top: 2px;
+    padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+    background: var(--raised);
+    border-top: 1px solid var(--line);
+  }
+  .sheet__foot > .btn { flex: 1; }
+
+  /* --- Toolbar & pencarian --- */
+  .toolbar { gap: 8px; }
+  .toolbar > .search { flex: 1 1 100%; max-width: 100% !important; }
+  .toolbar__spacer { display: none; }
+  .toolbar > .btn { flex: 1 1 auto; justify-content: center; }
+
+  /* --- Tabel --- */
+  .table-wrap { margin: 0; -webkit-overflow-scrolling: touch; }
+  .table { font-size: var(--fs-sm); }
+  .table th { padding: 9px 10px; }
+  .table td { padding: 10px; }
+  .table .btn--xs { height: 34px; }
+
+  /* --- Header halaman --- */
+  .phead__actions > .btn { flex: 1 1 auto; justify-content: center; }
+  .adm__head { align-items: stretch; }
+  .adm__actions { width: 100%; }
+  .adm__actions > * { flex: 1 1 auto; justify-content: center; }
+
+  /* --- Kartu & daftar --- */
+  .card__head { flex-wrap: wrap; }
+  .card__tools { margin-left: auto; }
+  .kv { gap: 8px; }
+
+  /* --- Settings --- */
+  .set-hint { margin-top: 10px; }
+  .set-foot { gap: 8px; }
+  .set-foot > .btn { flex: 1 1 auto; justify-content: center; }
+
+  /* --- Dashboard --- */
+  .dash-hero__top { align-items: flex-start; }
+  .dash-hero__foot { gap: 6px 14px; }
+}
+
+@media (width <= 480px) {
+  .kpis { gap: 8px; }
+  .stat { border-radius: 16px; padding: 11px 12px; }
+  .stat__value { font-size: var(--fs-2xl); }
+  .kv { grid-template-columns: 1fr; }
+  .rpt__mini { grid-template-columns: 1fr; }
+  .sheet__head { padding: 16px 15px 0; }
+  .sheet__body { padding: 14px 15px; }
+  .sheet__foot { padding: 11px 15px calc(11px + env(safe-area-inset-bottom)); }
+}
+
 @media print {
   @page { margin: 14mm; }
   html, body { background: #fff !important; height: auto !important; overflow: visible !important; }

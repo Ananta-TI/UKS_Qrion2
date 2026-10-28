@@ -1,13 +1,25 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import { useToast } from '@/components/ui/toast';
-import type { MedicineRow, MedicineUnit, StockOpnameResult } from '@/lib/database.types';
+import { fetchAllRows } from '@/lib/supabase/paginate';
+import {
+  isExpiryWarning,
+  isLowStock,
+  isMissingTable,
+} from '@/lib/stock';
+import type {
+  MedicineRow,
+  MedicineUnit,
+  RestockResult,
+  StockOpnameResult,
+} from '@/lib/database.types';
 import {
   Package,
   Plus,
@@ -23,6 +35,11 @@ import {
 } from 'lucide-react';
 
 type Filter = 'all' | 'low' | 'expiring';
+
+/** Modal dirender di body agar tidak terkurung ancestor ber-overflow/transform. */
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  return createPortal(children, document.body);
+}
 
 function InventoryPageInner() {
   const supabase = createClient();
@@ -54,8 +71,16 @@ function InventoryPageInner() {
   const [opnameSaving, setOpnameSaving] = useState(false);
 
   async function load() {
-    const { data } = await supabase.from('medicines').select('*').order('name', { ascending: true });
-    setMedicines(data ?? []);
+    // fetchAllRows: hindari batas ±1000 baris PostgREST yang memotong senyap.
+    const { data } = await fetchAllRows<MedicineRow>((from, to) =>
+      supabase
+        .from('medicines')
+        .select('*')
+        .order('name', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+    );
+    setMedicines(data);
     setNow(Date.now());
     setLoading(false);
   }
@@ -74,17 +99,8 @@ function InventoryPageInner() {
     router.replace('/inventory', { scroll: false });
   }, [searchParams, router]);
 
-  const lowOf = (m: MedicineRow) => (m.stock ?? 0) <= (m.min_stock ?? 5);
-  const expiredOf = (m: MedicineRow) => {
-    if (!m.expiry_date) return false;
-    return new Date(m.expiry_date).getTime() <= now;
-  };
-  const expiringOf = (m: MedicineRow) => {
-    if (!m.expiry_date) return false;
-    const diff = new Date(m.expiry_date).getTime() - now;
-    return diff > 0 && diff <= 30 * 24 * 60 * 60 * 1000;
-  };
-  const expiryWarningOf = (m: MedicineRow) => expiredOf(m) || expiringOf(m);
+  const lowOf = (m: MedicineRow) => isLowStock(m.stock, m.min_stock);
+  const expiryWarningOf = (m: MedicineRow) => isExpiryWarning(m.expiry_date, now);
 
   const lowStock = medicines.filter(lowOf).length;
   const expiring = medicines.filter(expiryWarningOf).length;
@@ -103,29 +119,80 @@ function InventoryPageInner() {
 
   async function addStock(id: string, qty: number) {
     const m = medicines.find((x) => x.id === id);
-    const { error } = await supabase
-      .from('medicines')
-      .update({ stock: (m?.stock ?? 0) + qty })
-      .eq('id', id);
-    if (error) {
-      toast.error(`Gagal menambah stok: ${error.message}`, 'Stok Gagal Diperbarui');
-      return;
-    }
+    const name = m?.name ?? 'obat';
 
-    await supabase.from('medicine_logs').insert({ medicine_id: id, type: 'in', qty, notes: 'Restok' });
-    // Catat batch penerimaan bila tabel tersedia (abaikan bila belum dimigrasi).
-    await supabase
-      .from('medicine_batches')
-      .insert({ medicine_id: id, qty, expiry_date: m?.expiry_date ?? null, notes: 'Restok' });
+    // Jalur utama: RPC atomik (stok + log + batch dalam satu transaksi).
+    const { data, error } = await supabase.rpc('restock_medicine', {
+      p_medicine: id,
+      p_qty: qty,
+      p_note: 'Restok',
+    });
+
+    if (error) {
+      // Fallback compare-and-set bila migrasi 008 belum dijalankan.
+      const { data: fresh, error: readError } = await supabase
+        .from('medicines')
+        .select('id,stock')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (readError || !fresh) {
+        toast.error(
+          `Gagal menambah stok: ${readError?.message ?? 'obat tidak ditemukan'}`,
+          'Stok Gagal Diperbarui'
+        );
+        return;
+      }
+
+      const before = fresh.stock ?? 0;
+      const { data: updated } = await supabase
+        .from('medicines')
+        .update({ stock: before + qty })
+        .eq('id', id)
+        .eq('stock', before)
+        .select('id')
+        .maybeSingle();
+
+      if (!updated) {
+        toast.error('Stok berubah saat diproses. Coba lagi.', 'Stok Gagal Diperbarui');
+        load();
+        return;
+      }
+
+      const { error: logError } = await supabase
+        .from('medicine_logs')
+        .insert({ medicine_id: id, type: 'in', qty, notes: 'Restok' });
+      if (logError && !isMissingTable(logError)) {
+        toast.error('Stok bertambah, tetapi riwayat stok gagal dicatat.', 'Peringatan');
+      }
+
+      const { error: batchError } = await supabase
+        .from('medicine_batches')
+        .insert({ medicine_id: id, qty, expiry_date: m?.expiry_date ?? null, notes: 'Restok' });
+      if (batchError && !isMissingTable(batchError)) {
+        toast.error('Stok bertambah, tetapi batch penerimaan gagal dicatat.', 'Peringatan');
+      }
+    } else {
+      const result = data as RestockResult | null;
+      if (result && result.ok === false) {
+        toast.error(
+          result.error === 'forbidden'
+            ? 'Anda tidak berwenang menambah stok obat ini.'
+            : 'Gagal menambah stok obat.',
+          'Stok Gagal Diperbarui'
+        );
+        return;
+      }
+    }
 
     await logClientActivity({
       action: 'restock',
       entity: 'medicine',
       entityId: id,
-      summary: `Menambah stok ${m?.name ?? 'obat'} sebanyak ${qty}`,
+      summary: `Menambah stok ${name} sebanyak ${qty}`,
       metadata: { stock_before: m?.stock ?? 0, added: qty },
     });
-    toast.success(`Stok ${m?.name ?? 'obat'} berhasil ditambah ${qty}.`, 'Stok Diperbarui');
+    toast.success(`Stok ${name} berhasil ditambah ${qty}.`, 'Stok Diperbarui');
     load();
   }
 
@@ -244,35 +311,82 @@ function InventoryPageInner() {
 
     setSaving(true);
 
-    const payload = {
+    const stock = parseInt(form.stock || '0', 10) || 0;
+    const fields = {
       name,
       category: form.category.trim() || null,
       unit: form.unit,
-      stock: parseInt(form.stock || '0', 10) || 0,
       min_stock: parseInt(form.min_stock || '5', 10) || 0,
       location: form.location.trim() || null,
       expiry_date: form.expiry_date || null,
     };
 
     if (editing) {
-      const { error } = await supabase.from('medicines').update(payload).eq('id', editing.id);
-      setSaving(false);
+      const before = editing.stock ?? 0;
+
+      // Perubahan selain stok.
+      const { error } = await supabase.from('medicines').update(fields).eq('id', editing.id);
       if (error) {
+        setSaving(false);
         toast.error(`Gagal menyimpan perubahan: ${error.message}`, 'Obat Gagal Disimpan');
         return;
       }
+
+      // Perubahan stok dirutekan lewat RPC opname agar batch + log ikut terjaga.
+      if (stock !== before) {
+        const { data, error: opError } = await supabase.rpc('apply_stock_opname', {
+          p_medicine: editing.id,
+          p_counted: stock,
+          p_note: 'Penyesuaian via edit obat',
+        });
+
+        if (opError) {
+          // Fallback bila RPC belum dimigrasi.
+          const { error: updError } = await supabase
+            .from('medicines')
+            .update({ stock })
+            .eq('id', editing.id);
+          if (updError) {
+            setSaving(false);
+            toast.error(`Gagal menyesuaikan stok: ${updError.message}`, 'Obat Gagal Disimpan');
+            return;
+          }
+          const diff = stock - before;
+          if (diff !== 0) {
+            const { error: logError } = await supabase.from('medicine_logs').insert({
+              medicine_id: editing.id,
+              type: diff > 0 ? 'in' : 'out',
+              qty: Math.abs(diff),
+              notes: 'Penyesuaian via edit obat',
+            });
+            if (logError && !isMissingTable(logError)) {
+              toast.error('Stok disesuaikan, tetapi riwayat stok gagal dicatat.', 'Peringatan');
+            }
+          }
+        } else {
+          const result = data as StockOpnameResult | null;
+          if (result && result.ok === false) {
+            setSaving(false);
+            toast.error('Stok ditolak server. Muat ulang lalu coba lagi.', 'Obat Gagal Disimpan');
+            load();
+            return;
+          }
+        }
+      }
+
+      setSaving(false);
       await logClientActivity({
         action: 'update',
         entity: 'medicine',
         entityId: editing.id,
         summary: `Mengubah data obat ${name}`,
-        metadata: { stock_before: editing.stock ?? 0, stock_after: payload.stock },
+        metadata: { stock_before: before, stock_after: stock },
       });
       toast.success(`Obat ${name} berhasil diperbarui.`, 'Perubahan Disimpan');
     } else {
       const { data: created, error } = await supabase
         .from('medicines')
-        .insert(payload)
+        .insert({ ...fields, stock })
         .select('id')
         .single();
       setSaving(false);
@@ -280,12 +394,26 @@ function InventoryPageInner() {
         toast.error(`Gagal menambah obat: ${error.message}`, 'Obat Gagal Ditambahkan');
         return;
       }
+
+      // Batch saldo awal agar pelacakan batch konsisten sejak awal.
+      if (created && stock > 0) {
+        const { error: batchError } = await supabase.from('medicine_batches').insert({
+          medicine_id: (created as { id: string }).id,
+          qty: stock,
+          expiry_date: fields.expiry_date,
+          notes: 'Stok awal',
+        });
+        if (batchError && !isMissingTable(batchError)) {
+          toast.error('Obat ditambahkan, tetapi batch awal gagal dicatat.', 'Peringatan');
+        }
+      }
+
       await logClientActivity({
         action: 'create',
         entity: 'medicine',
         entityId: (created as { id: string } | null)?.id ?? null,
         summary: `Menambahkan obat ${name}`,
-        metadata: { category: payload.category, stock: payload.stock },
+        metadata: { category: fields.category, stock },
       });
       toast.success(`Obat ${name} berhasil ditambahkan.`, 'Obat Ditambahkan');
     }
@@ -470,6 +598,7 @@ function InventoryPageInner() {
       </div>
 
       {open && (
+        <ModalPortal>
         <div className="overlay" onClick={() => setOpen(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={editing ? 'Edit obat' : 'Tambah obat'}>
             <div className="sheet__head">
@@ -527,9 +656,11 @@ function InventoryPageInner() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {opnameFor && (
+        <ModalPortal>
         <div className="overlay" onClick={() => setOpnameFor(null)}>
           <div
             className="sheet"
@@ -598,6 +729,7 @@ function InventoryPageInner() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </AppShell>
   );

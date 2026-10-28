@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { AlertTriangle, Bell, CalendarClock, PackageX, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { fetchAllRows } from '@/lib/supabase/paginate';
+import { DAY_MS, expiryState, isLowStock } from '@/lib/stock';
 
 type MedicineRow = {
   id: string;
@@ -22,18 +24,15 @@ type Alert = {
   text: string;
 };
 
-const DAY = 24 * 60 * 60 * 1000;
-
 function buildAlerts(rows: MedicineRow[], now: number): Alert[] {
   const alerts: Alert[] = [];
-  const soon = now + 30 * DAY;
 
   for (const m of rows) {
     const stock = m.stock ?? 0;
     const min = m.min_stock ?? 5;
     const unit = m.unit ?? '';
 
-    if (stock <= min) {
+    if (isLowStock(m.stock, m.min_stock)) {
       alerts.push({
         id: `low-${m.id}`,
         name: m.name,
@@ -42,14 +41,18 @@ function buildAlerts(rows: MedicineRow[], now: number): Alert[] {
       });
     }
 
-    if (m.expiry_date) {
-      const expiry = new Date(m.expiry_date).getTime();
-      if (expiry <= now) {
-        alerts.push({ id: `exp-${m.id}`, name: m.name, kind: 'expired', text: 'Sudah kedaluwarsa' });
-      } else if (expiry <= soon) {
-        const days = Math.max(0, Math.ceil((expiry - now) / DAY));
-        alerts.push({ id: `soon-${m.id}`, name: m.name, kind: 'expiring', text: `Kedaluwarsa dalam ${days} hari` });
-      }
+    const state = expiryState(m.expiry_date, now);
+    if (state === 'expired') {
+      alerts.push({ id: `exp-${m.id}`, name: m.name, kind: 'expired', text: 'Sudah kedaluwarsa' });
+    } else if (state === 'expiring') {
+      const expiry = new Date(m.expiry_date as string).getTime();
+      const days = Math.max(0, Math.ceil((expiry - now) / DAY_MS));
+      alerts.push({
+        id: `soon-${m.id}`,
+        name: m.name,
+        kind: 'expiring',
+        text: `Kedaluwarsa dalam ${days} hari`,
+      });
     }
   }
 
@@ -63,44 +66,70 @@ function AlertIcon({ kind }: { kind: Alert['kind'] }) {
   return <PackageX className="ico" style={{ color: 'var(--warn)' }} />;
 }
 
+/*
+ * Penyimpanan bersama tingkat-modul.
+ *
+ * Lonceng dipasang dua kali (top bar mobile + kepala sidebar). Sebelumnya tiap
+ * instance memuat data sendiri sehingga query inventaris dan interval 5 menit
+ * berjalan dobel. Sekarang keduanya berbagi satu cache, satu query, dan satu
+ * interval — instans hanya berbeda pada posisi panel yang terbuka.
+ */
+type AlertState = { alerts: Alert[]; loading: boolean };
+
+let snapshot: AlertState = { alerts: [], loading: true };
+const listeners = new Set<(state: AlertState) => void>();
+let timer: ReturnType<typeof setInterval> | null = null;
+
+function publish(next: AlertState) {
+  snapshot = next;
+  listeners.forEach((listener) => listener(snapshot));
+}
+
+async function refresh() {
+  try {
+    const supabase = createClient();
+    const { data } = await fetchAllRows<MedicineRow>((from, to) =>
+      supabase
+        .from('medicines')
+        .select('id,name,unit,stock,min_stock,expiry_date')
+        .order('name', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+    );
+    publish({ alerts: buildAlerts(data, Date.now()), loading: false });
+  } catch {
+    publish({ alerts: [], loading: false });
+  }
+}
+
+function subscribe(listener: (state: AlertState) => void) {
+  listeners.add(listener);
+  listener(snapshot);
+
+  if (listeners.size === 1) {
+    if (snapshot.loading) void refresh();
+    timer = setInterval(() => void refresh(), 5 * 60 * 1000);
+  }
+
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0 && timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  };
+}
+
 type PanelPos = { top: number; left: number; width: number };
 
 export function NotificationsBell({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [{ alerts, loading }, setAlertState] = useState<AlertState>(snapshot);
   const [pos, setPos] = useState<PanelPos | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from('medicines')
-        .select('id,name,unit,stock,min_stock,expiry_date')
-        .order('name', { ascending: true })
-        .limit(500);
-
-      setAlerts(buildAlerts((data ?? []) as MedicineRow[], Date.now()));
-    } catch {
-      setAlerts([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    // Dimuat sedikit tertunda agar tidak memicu render berantai saat mount.
-    const first = setTimeout(() => void load(), 0);
-    // Segarkan tiap 5 menit agar notifikasi tidak basi.
-    const timer = setInterval(() => void load(), 5 * 60 * 1000);
-    return () => {
-      clearTimeout(first);
-      clearInterval(timer);
-    };
-  }, []);
+  useEffect(() => subscribe(setAlertState), []);
 
   useEffect(() => {
     if (!open) return;
@@ -119,7 +148,7 @@ export function NotificationsBell({ className }: { className?: string }) {
 
     const start = setTimeout(() => {
       place();
-      void load();
+      void refresh();
     }, 0);
 
     const onPointer = (e: PointerEvent) => {
