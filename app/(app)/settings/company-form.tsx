@@ -183,13 +183,13 @@ export function CompanyForm({
           <div className="card__title">
             <FileText className="ico" />
             <span>
-              Pratinjau dokumen
-              <span className="card__sub">Tampilan pada laporan dan surat UKS.</span>
+              Pratinjau profil
+              <span className="card__sub">Tampilan profil sekolah Anda.</span>
             </span>
           </div>
           <span className="spill spill--iris">
             <i />
-            Live
+            Langsung
           </span>
         </div>
 
@@ -223,7 +223,7 @@ export function CompanyForm({
           </div>
 
           <div className="set-doc__foot">
-            <span>DIREKTORI UKS</span>
+            <span>PROFIL UKS</span>
             <span>{school.slug ?? 'sekolah'}</span>
           </div>
         </div>

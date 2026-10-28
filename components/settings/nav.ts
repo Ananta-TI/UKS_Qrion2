@@ -17,7 +17,7 @@ export const settingsNav = [
   {
     href: '/settings/data',
     label: 'Data',
-    desc: 'Ekspor atau mulai ulang',
+    desc: 'Ekspor data sekolah',
     icon: Download,
   },
 ];

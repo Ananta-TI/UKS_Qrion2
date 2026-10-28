@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { Json } from '@/lib/database.types';
 
 export type ActivityAction =
   | 'login'
@@ -9,7 +10,6 @@ export type ActivityAction =
   | 'restock'
   | 'stock_out'
   | 'export'
-  | 'reset'
   | 'impersonate';
 
 export type ActivityInput = {
@@ -41,7 +41,7 @@ export async function logActivity(input: ActivityInput) {
       entity: input.entity,
       entity_id: input.entityId ?? null,
       summary: input.summary,
-      metadata: input.metadata ?? {},
+      metadata: (input.metadata ?? {}) as Json,
     });
 
     if (error) {

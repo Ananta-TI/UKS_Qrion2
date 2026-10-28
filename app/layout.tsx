@@ -10,8 +10,13 @@ const urbanist = Urbanist({
 });
 
 export const metadata = {
-  title: 'UKS Sisfo — Sistem Informasi Kesehatan Sekolah',
+  title: 'Qrion — Sistem Informasi Kesehatan Sekolah',
   description: 'Aplikasi internal untuk Staf/Petugas UKS',
+  icons: {
+    icon: [{ url: '/icon.png', type: 'image/png' }],
+    shortcut: ['/icon.png'],
+    apple: [{ url: '/icon.png', type: 'image/png' }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

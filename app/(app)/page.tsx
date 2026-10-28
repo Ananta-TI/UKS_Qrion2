@@ -23,6 +23,8 @@ import { CountUp } from '@/components/ui/count-up';
 import { Sparkline } from '@/components/dashboard/spark';
 import { YearChart } from '@/components/dashboard/year-chart';
 import { getAuthUser, getSessionProfile } from '@/lib/auth';
+import { fetchAllRows } from '@/lib/supabase/paginate';
+import { visitStatusLabels } from '@/lib/visit-status';
 
 type VisitRow = {
   id: string;
@@ -55,9 +57,9 @@ type ActivityRow = {
 };
 
 const statusMap: Record<string, { label: string; cls: string; dot: string }> = {
-  back_to_class: { label: 'Kembali ke kelas', cls: 'badge badge--good', dot: 'var(--good)' },
-  referred: { label: 'Dirujuk', cls: 'badge badge--bad', dot: 'var(--bad)' },
-  picked_up: { label: 'Orang tua', cls: 'badge badge--warn', dot: 'var(--warn)' },
+  back_to_class: { label: visitStatusLabels.back_to_class, cls: 'badge badge--good', dot: 'var(--good)' },
+  referred: { label: visitStatusLabels.referred, cls: 'badge badge--bad', dot: 'var(--bad)' },
+  picked_up: { label: visitStatusLabels.picked_up, cls: 'badge badge--warn', dot: 'var(--warn)' },
 };
 
 const tones = ['av--sky', 'av--teal', 'av--coral', 'av--amber', 'av--rose', 'av--plum', 'av--iris'];
@@ -122,23 +124,30 @@ export default async function DashboardPage() {
 
   // Mulai query data lebih dulu, lalu ambil profil paralel dengan query tersebut.
   const dataPromise = Promise.all([
-    supabase.from('students').select('id,class').limit(5000),
+    fetchAllRows<{ id: string; class: string | null }>((from, to) =>
+      supabase.from('students').select('id,class').order('id').range(from, to)
+    ),
     supabase
       .from('visits')
       .select('id,student_id,check_in_at,final_status,chief_complaint,treatment,students(full_name,nis,class)')
       .gte('check_in_at', todayStart.toISOString())
       .lt('check_in_at', tomorrowStart.toISOString())
       .order('check_in_at', { ascending: false }),
-    supabase
-      .from('visits')
-      .select('id,student_id,check_in_at,final_status,students(class)')
-      .gte('check_in_at', lookback.toISOString())
-      .order('check_in_at', { ascending: false })
-      .limit(5000),
+    fetchAllRows((from, to) =>
+      supabase
+        .from('visits')
+        .select('id,student_id,check_in_at,final_status,students(class)')
+        .gte('check_in_at', lookback.toISOString())
+        .order('check_in_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to)
+    ),
     supabase
       .from('medicines')
       .select('id,name,category,unit,stock,min_stock,expiry_date,location')
-      .order('name', { ascending: true }),    supabase.from('activity_logs')
+      .order('name', { ascending: true }),
+    supabase
+      .from('activity_logs')
       .select('id,actor_name,action,entity,summary,created_at')
       .order('created_at', { ascending: false })
       .limit(7),
@@ -257,9 +266,9 @@ export default async function DashboardPage() {
   }).length;
 
   const funnel = [
-    { label: 'Kembali ke kelas', desc: 'ditangani di UKS', count: 0 },
-    { label: 'Dirujuk ke faskes', desc: 'butuh penanganan lanjut', count: 0 },
-    { label: 'Dijemput orang tua', desc: 'pulang bersama wali', count: 0 },
+    { label: visitStatusLabels.back_to_class, desc: 'ditangani di UKS', count: 0 },
+    { label: visitStatusLabels.referred, desc: 'butuh penanganan lanjut', count: 0 },
+    { label: visitStatusLabels.picked_up, desc: 'pulang bersama wali', count: 0 },
   ];
   last30Days.forEach((visit) => {
     if (visit.final_status === 'back_to_class') funnel[0].count += 1;
@@ -268,7 +277,7 @@ export default async function DashboardPage() {
   });
   const funnelTotal = last30Days.length;
   const funnelMax = Math.max(1, ...funnel.map((row) => row.count));
-  const notReturned = funnelTotal - funnel[0].count;
+  const notReturned = funnel[1].count + funnel[2].count;
 
   const classTotals = new Map<string, { visits: number; students: Set<string> }>();
   last30Days.forEach((visit) => {
@@ -317,7 +326,7 @@ export default async function DashboardPage() {
           </span>
           <span className="shift__txt">
             <b>{dateLabel}</b>
-            <small>{weekTotal} kunjungan dalam 7 hari</small>
+            <small>{weekTotal} kunjungan 7 hari terakhir</small>
           </span>
         </div>
       }
@@ -343,7 +352,7 @@ export default async function DashboardPage() {
 
             <p className="dash-hero__lead">
               <b>{todayCount} kunjungan</b> tercatat hari ini, <b>{referredToday} dirujuk</b>, dan{' '}
-              <b>{lowStockAll.length} obat</b> perlu restock
+              <b>{lowStockAll.length} obat</b> perlu ditambah stok
               {expiringSoon > 0 ? (
                 <>
                   . <b>{expiringSoon} obat</b> mendekati kedaluwarsa.
@@ -394,7 +403,7 @@ export default async function DashboardPage() {
                 <Users className="ico" /> {totalStudents} siswa · {classCount} kelas
               </span>
               <span>
-                <CalendarDays className="ico" /> {weekTotal} kunjungan minggu ini
+                <CalendarDays className="ico" /> {weekTotal} kunjungan 7 hari terakhir
               </span>
             </div>
           </section>
@@ -458,7 +467,7 @@ export default async function DashboardPage() {
                   <i style={{ background: 'var(--chart-2)' }} /> Rujukan
                 </span>
               </div>
-              <small>{weekReferred} rujukan minggu ini</small>
+              <small>{weekReferred} rujukan 7 hari terakhir</small>
             </div>
           </section>
         </div>
@@ -503,7 +512,7 @@ export default async function DashboardPage() {
               <span className="dash-kpi__ico">
                 <TrendingUp className="ico" />
               </span>
-              Rata-rata per hari
+              Rata-rata per hari aktif
             </div>
             <div className="dash-kpi__row">
               <div className="dash-kpi__value">
@@ -511,7 +520,9 @@ export default async function DashboardPage() {
               </div>
               <Sparkline values={monthly.map((month) => month.total)} />
             </div>
-            <div className="dash-kpi__foot">{activeDaysYear} hari aktif sepanjang tahun</div>
+            <div className="dash-kpi__foot">
+              {yearTotal} kunjungan ÷ {activeDaysYear} hari ada kunjungan
+            </div>
           </div>
 
           <div className="dash-kpi">
@@ -585,7 +596,7 @@ export default async function DashboardPage() {
               <AlertTriangle className="ico" />
               <span>
                 {funnelTotal
-                  ? `${notReturned} kunjungan membutuhkan tindak lanjut di luar UKS.`
+                  ? `${notReturned} kunjungan tidak kembali ke kelas.`
                   : 'Belum ada kunjungan pada 30 hari terakhir.'}
               </span>
             </div>
@@ -654,11 +665,11 @@ export default async function DashboardPage() {
                 <Pill className="ico" />
                 <span>
                   Stok menipis
-                  <span className="card__sub">Obat di bawah stok minimum.</span>
+                  <span className="card__sub">Obat pada atau di bawah stok minimum.</span>
                 </span>
               </div>
               <Link href="/inventory" prefetch={false} className="card__link dash-link">
-                Restock <ChevronRight className="ico" />
+                Tambah stok <ChevronRight className="ico" />
               </Link>
             </div>
 
@@ -711,10 +722,15 @@ export default async function DashboardPage() {
                   <span className="card__sub">Jejak perubahan terbaru di sekolah Anda.</span>
                 </span>
               </div>
-              <span className="spill spill--teal">
-                <i />
-                Live
-              </span>
+              <div className="card__tools">
+                <span className="spill spill--teal">
+                  <i />
+                  Langsung
+                </span>
+                <Link href="/activity" prefetch={false} className="btn btn--ghost btn--sm">
+                  Lihat semua
+                </Link>
+              </div>
             </div>
 
             {activity.length === 0 ? (

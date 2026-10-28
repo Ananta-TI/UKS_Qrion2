@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Download,
   FileText,
+  Pill,
   Star,
   Stethoscope,
   Trash2,
@@ -22,9 +23,18 @@ import {
 } from 'lucide-react';
 import type { ChartConfig } from '@/components/evilcharts/charts/echarts-area-chart';
 import { useChartColors } from '@/components/charts/use-chart-colors';
+import { fetchAllRows } from '@/lib/supabase/paginate';
+import { visitStatusLabel, visitStatusLabels } from '@/lib/visit-status';
+import { exportReportsExcel } from '@/lib/reports/export-excel';
+import { useToast } from '@/components/ui/toast';
 
 // ECharts dan jsPDF tidak ikut bundle awal halaman Laporan.
 const ReportAreaChart = dynamic(() => import('@/components/charts/report-area-chart'), {
+  ssr: false,
+  loading: () => <div className="skel" style={{ height: 260, width: '100%' }} />,
+});
+
+const MedicineMoveChart = dynamic(() => import('@/components/charts/medicine-move-chart'), {
   ssr: false,
   loading: () => <div className="skel" style={{ height: 260, width: '100%' }} />,
 });
@@ -43,8 +53,8 @@ const ranges = [
 const defaultRange = ranges.find((r) => r.key === '6m') ?? ranges[0];
 
 type RangeKey = (typeof ranges)[number]['key'];
-type Metric = 'visits' | 'students' | 'returned' | 'referred' | 'picked';
-type GroupBy = 'month' | 'class' | 'complaint' | 'status';
+type Metric = 'visits' | 'students' | 'returned' | 'referred' | 'picked' | 'med_out' | 'med_in';
+type GroupBy = 'month' | 'class' | 'complaint' | 'status' | 'medicine';
 type ChartKind = 'area' | 'bars';
 type Tab = 'overview' | 'builder';
 
@@ -54,6 +64,8 @@ const metrics: { key: Metric; label: string; desc: string; icon: typeof Clipboar
   { key: 'returned', label: 'Kembali ke kelas', desc: 'Siswa yang langsung belajar lagi', icon: CheckCircle2 },
   { key: 'referred', label: 'Rujukan', desc: 'Dirujuk ke faskes / RS', icon: AlertCircle },
   { key: 'picked', label: 'Dijemput', desc: 'Dijemput orang tua', icon: Stethoscope },
+  { key: 'med_out', label: 'Obat keluar', desc: 'Jumlah obat yang diberikan', icon: Pill },
+  { key: 'med_in', label: 'Obat masuk', desc: 'Jumlah obat yang direstok', icon: Pill },
 ];
 
 const groupOptions: { key: GroupBy; label: string }[] = [
@@ -61,12 +73,13 @@ const groupOptions: { key: GroupBy; label: string }[] = [
   { key: 'class', label: 'Kelas' },
   { key: 'complaint', label: 'Keluhan' },
   { key: 'status', label: 'Status' },
+  { key: 'medicine', label: 'Obat' },
 ];
 
 const statusMap: Record<string, { label: string; cls: string; color: string }> = {
-  back_to_class: { label: 'Kembali ke Kelas', cls: 'badge badge--good', color: 'var(--good)' },
-  referred: { label: 'Dirujuk ke Faskes/RS', cls: 'badge badge--bad', color: 'var(--bad)' },
-  picked_up: { label: 'Dijemput Orang Tua', cls: 'badge badge--warn', color: 'var(--warn)' },
+  back_to_class: { label: visitStatusLabels.back_to_class, cls: 'badge badge--good', color: 'var(--good)' },
+  referred: { label: visitStatusLabels.referred, cls: 'badge badge--bad', color: 'var(--bad)' },
+  picked_up: { label: visitStatusLabels.picked_up, cls: 'badge badge--warn', color: 'var(--warn)' },
 };
 
 type VisitRow = {
@@ -74,12 +87,38 @@ type VisitRow = {
   student_id: string | null;
   check_in_at: string;
   chief_complaint: string | null;
+  temperature: number | null;
+  blood_pressure: string | null;
+  weight: number | null;
+  height: number | null;
   treatment: string | null;
   final_status: string | null;
+  notes: string | null;
   students?: { id: string; full_name: string | null; nis: string | null; class: string | null } | null;
 };
 
 type GroupDatum = { key: string; label: string; value: number };
+
+type MedicineRow = {
+  id: string;
+  name: string;
+  category: string | null;
+  unit: string | null;
+  stock: number | null;
+  min_stock: number | null;
+  location: string | null;
+  expiry_date: string | null;
+};
+
+type MedicineLogRow = {
+  id: string;
+  medicine_id: string;
+  type: string;
+  qty: number;
+  reference_id: string | null;
+  notes: string | null;
+  created_at: string;
+};
 
 type SavedReport = {
   id: string;
@@ -89,7 +128,32 @@ type SavedReport = {
   chart: ChartKind;
   range: RangeKey;
   createdAt: string;
+  createdByName?: string | null;
 };
+
+type SavedReportRow = {
+  id: string;
+  name: string;
+  metric: string;
+  group_by: string;
+  chart: string;
+  range_key: string;
+  created_at: string;
+  created_by_name: string | null;
+};
+
+function mapSavedReport(row: SavedReportRow): SavedReport {
+  return {
+    id: row.id,
+    name: row.name,
+    metric: (metrics.some((m) => m.key === row.metric) ? row.metric : 'visits') as Metric,
+    groupBy: (groupOptions.some((g) => g.key === row.group_by) ? row.group_by : 'month') as GroupBy,
+    chart: row.chart === 'bars' ? 'bars' : 'area',
+    range: (ranges.some((r) => r.key === row.range_key) ? row.range_key : '6m') as RangeKey,
+    createdAt: row.created_at,
+    createdByName: row.created_by_name,
+  };
+}
 
 function monthKey(iso: string) {
   const d = new Date(iso);
@@ -117,8 +181,22 @@ function exportTime(iso: string) {
 }
 
 function exportStatus(status: string | null) {
-  if (!status) return 'Belum diisi';
-  return statusMap[status]?.label ?? status;
+  return visitStatusLabel(status);
+}
+
+/** Ringkasan status obat untuk keperluan ekspor. */
+function medicineStatus(m: MedicineRow) {
+  const stock = m.stock ?? 0;
+  const min = m.min_stock ?? 5;
+  const expiry = m.expiry_date ? new Date(m.expiry_date).getTime() : null;
+  const expired = expiry !== null && expiry <= Date.now();
+  const soon = expiry !== null && !expired && expiry - Date.now() <= 30 * 24 * 60 * 60 * 1000;
+
+  const parts: string[] = [];
+  if (expired) parts.push('Kedaluwarsa');
+  else if (soon) parts.push('≤ 30 hari');
+  if (stock <= min) parts.push('Stok menipis');
+  return parts.length ? parts.join(' · ') : 'Aman';
 }
 
 /** Tren 7 hari selalu menampilkan tujuh titik, termasuk hari tanpa kunjungan. */
@@ -173,7 +251,7 @@ function buildGroups(visits: VisitRow[], groupBy: GroupBy, metric: Metric): Grou
       label = v.chief_complaint || 'Lainnya';
       key = label;
     } else {
-      label = statusMap[v.final_status ?? '']?.label ?? 'Belum diisi';
+      label = visitStatusLabel(v.final_status);
       key = label;
     }
 
@@ -194,7 +272,7 @@ function buildGroups(visits: VisitRow[], groupBy: GroupBy, metric: Metric): Grou
     : rows.sort((a, b) => b.value - a.value);
 }
 
-function AreaChart({ data }: { data: GroupDatum[]; id?: string }) {
+function AreaChart({ data }: { data: GroupDatum[] }) {
   const accent = useChartColors();
 
   if (data.length < 2) {
@@ -313,7 +391,10 @@ function Gauge({ pct }: { pct: number }) {
 
 export default function ReportsPage() {
   const supabase = createClient();
+  const { toast } = useToast();
   const [visits, setVisits] = useState<VisitRow[]>([]);
+  const [medicines, setMedicines] = useState<MedicineRow[]>([]);
+  const [medicineLogs, setMedicineLogs] = useState<MedicineLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangeKey>(defaultRange.key);
   const [query, setQuery] = useState('');
@@ -323,31 +404,82 @@ export default function ReportsPage() {
   const [groupBy, setGroupBy] = useState<GroupBy>('month');
   const [chart, setChart] = useState<ChartKind>('area');
   const [saved, setSaved] = useState<SavedReport[]>([]);
+  const [savedSource, setSavedSource] = useState<'server' | 'local'>('server');
 
+  // Laporan tersimpan dibaca dari server agar bisa dibagi antar-staf.
+  // Bila tabel `saved_reports` belum dibuat, otomatis jatuh ke localStorage.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('uks:saved-reports');
-      if (raw) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setSaved(JSON.parse(raw) as SavedReport[]);
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('saved_reports')
+        .select('id,name,metric,group_by,chart,range_key,created_at,created_by_name')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (cancelled) return;
+
+      if (error) {
+        try {
+          const raw = localStorage.getItem('uks:saved-reports');
+          if (raw) setSaved(JSON.parse(raw) as SavedReport[]);
+        } catch {}
+        setSavedSource('local');
+        return;
       }
-    } catch {}
+
+      setSaved(((data ?? []) as SavedReportRow[]).map(mapSavedReport));
+      setSavedSource('server');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function load() {
     setLoading(true);
     const selected = ranges.find((r) => r.key === range) ?? defaultRange;
-    let q = supabase.from('visits').select('*, students(*)').order('check_in_at', { ascending: false });
 
+    const since = new Date();
     if (selected.days > 0) {
-      const since = new Date();
       since.setHours(0, 0, 0, 0);
       since.setDate(since.getDate() - (selected.days - 1));
-      q = q.gte('check_in_at', since.toISOString());
     }
 
-    const { data } = await q;
-    setVisits((data ?? []) as VisitRow[]);
+    const [visitsRes, medicinesRes, logsRes] = await Promise.all([
+      fetchAllRows<VisitRow>((from, to) => {
+        let q = supabase
+          .from('visits')
+          .select('*, students(*)')
+          .order('check_in_at', { ascending: false })
+          .order('id', { ascending: false });
+
+        if (selected.days > 0) q = q.gte('check_in_at', since.toISOString());
+
+        return q.range(from, to);
+      }),
+      fetchAllRows<MedicineRow>((from, to) =>
+        supabase.from('medicines').select('*').order('name').order('id').range(from, to)
+      ),
+      fetchAllRows<MedicineLogRow>((from, to) => {
+        let q = supabase
+          .from('medicine_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false });
+
+        if (selected.days > 0) q = q.gte('created_at', since.toISOString());
+
+        return q.range(from, to);
+      }),
+    ]);
+
+    setVisits(visitsRes.data);
+    setMedicines(medicinesRes.data);
+    setMedicineLogs(logsRes.data);
     setLoading(false);
   }
 
@@ -406,9 +538,116 @@ export default function ReportsPage() {
   const maxStudentVisits = Math.max(1, ...topStudents.map((s) => s.count));
   const topSignature = topStudents.map((s) => `${s.id}:${s.count}`).join('|');
 
+  const medicineById = new Map(medicines.map((m) => [m.id, m]));
+
+  // Pergerakan stok obat pada periode terpilih: harian untuk 7 hari, sisanya bulanan.
+  const medMovement = (() => {
+    const buckets = new Map<string, { key: string; label: string; masuk: number; keluar: number }>();
+
+    if (range === '7d') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      for (let i = 6; i >= 0; i -= 1) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const key = dayKey(d.toISOString());
+        buckets.set(key, {
+          key,
+          label: d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+          masuk: 0,
+          keluar: 0,
+        });
+      }
+    }
+
+    for (const log of medicineLogs) {
+      const key = range === '7d' ? dayKey(log.created_at) : monthKey(log.created_at);
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        const d = new Date(log.created_at);
+        bucket = {
+          key,
+          label:
+            range === '7d'
+              ? d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+              : d.toLocaleDateString('id-ID', { month: 'short' }),
+          masuk: 0,
+          keluar: 0,
+        };
+        buckets.set(key, bucket);
+      }
+      if (log.type === 'in') bucket.masuk += log.qty || 0;
+      else bucket.keluar += log.qty || 0;
+    }
+
+    const rows = [...buckets.values()];
+    return range === '7d' ? rows : rows.sort((a, b) => a.key.localeCompare(b.key));
+  })();
+
+  const medInTotal = medicineLogs.reduce((sum, l) => (l.type === 'in' ? sum + (l.qty || 0) : sum), 0);
+  const medOutTotal = medicineLogs.reduce((sum, l) => (l.type === 'out' ? sum + (l.qty || 0) : sum), 0);
+
+  // Obat paling sering diberikan (total keluar) pada periode ini.
+  const medRanking = (() => {
+    const map = new Map<string, { name: string; masuk: number; keluar: number }>();
+    for (const log of medicineLogs) {
+      const name = medicineById.get(log.medicine_id)?.name ?? 'Obat dihapus';
+      const cur = map.get(log.medicine_id) ?? { name, masuk: 0, keluar: 0 };
+      if (log.type === 'out') cur.keluar += log.qty || 0;
+      else cur.masuk += log.qty || 0;
+      map.set(log.medicine_id, cur);
+    }
+    return [...map.values()]
+      .filter((r) => r.keluar > 0)
+      .sort((a, b) => b.keluar - a.keluar)
+      .slice(0, 8);
+  })();
+  const medMaxOut = Math.max(1, ...medRanking.map((r) => r.keluar));
+
+  const medMoveConfig: ChartConfig = {
+    masuk: { label: 'Masuk' },
+    keluar: { label: 'Keluar' },
+  };
+
   const metricInfo = metrics.find((m) => m.key === metric) ?? metrics[0];
   const groupInfo = groupOptions.find((g) => g.key === groupBy) ?? groupOptions[0];
-  const builderGroups = buildGroups(visits, groupBy, metric);
+  const isMedicineMetric = metric === 'med_out' || metric === 'med_in';
+
+  // Kelompokkan pergerakan obat (pemakaian/restok) per bulan atau per obat.
+  function buildMedicineGroups(group: GroupBy, met: Metric): GroupDatum[] {
+    const type = met === 'med_out' ? 'out' : 'in';
+    const buckets = new Map<string, { label: string; count: number }>();
+
+    for (const log of medicineLogs) {
+      if (log.type !== type) continue;
+
+      let key: string;
+      let label: string;
+
+      if (group === 'month') {
+        key = monthKey(log.created_at);
+        label = new Date(log.created_at).toLocaleDateString('id-ID', { month: 'short' });
+      } else {
+        const name = medicineById.get(log.medicine_id)?.name ?? 'Obat dihapus';
+        key = name;
+        label = name;
+      }
+
+      const bucket = buckets.get(key) ?? { label, count: 0 };
+      bucket.count += log.qty || 0;
+      buckets.set(key, bucket);
+    }
+
+    const rows = [...buckets.entries()].map(([key, b]) => ({ key, label: b.label, value: b.count }));
+    return group === 'month'
+      ? rows.sort((a, b) => a.key.localeCompare(b.key))
+      : rows.sort((a, b) => b.value - a.value);
+  }
+
+  const builderGroups = isMedicineMetric
+    ? buildMedicineGroups(groupBy, metric)
+    : buildGroups(visits, groupBy, metric);
+  const areaDisabled = groupBy === 'complaint' || groupBy === 'medicine';
   const builderSignature = builderGroups.map((g) => `${g.key}:${g.value}`).join('|');
   const builderTotal = builderGroups.reduce((sum, g) => sum + g.value, 0);
   const builderMax = Math.max(1, ...builderGroups.map((g) => g.value));
@@ -421,19 +660,19 @@ export default function ReportsPage() {
     null
   );
 
-  function persist(next: SavedReport[]) {
+  function persistLocal(next: SavedReport[]) {
     setSaved(next);
     try {
       localStorage.setItem('uks:saved-reports', JSON.stringify(next));
     } catch {}
   }
 
-  function saveReport() {
+  async function saveReport() {
     const fallback = `${metricInfo.label} per ${groupInfo.label}`;
     const name = window.prompt('Nama laporan:', fallback)?.trim();
     if (!name) return;
 
-    const item: SavedReport = {
+    const optimistic: SavedReport = {
       id: crypto.randomUUID(),
       name,
       metric,
@@ -443,23 +682,80 @@ export default function ReportsPage() {
       createdAt: new Date().toISOString(),
     };
 
-    persist([item, ...saved].slice(0, 12));
+    if (savedSource === 'server') {
+      let createdByName: string | null = null;
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const { data: p } = await supabase
+            .from('profiles')
+            .select('full_name,email')
+            .eq('id', user.id)
+            .maybeSingle();
+          createdByName = p?.full_name ?? p?.email ?? null;
+        }
+      } catch {}
+
+      const { data, error } = await supabase
+        .from('saved_reports')
+        .insert({ name, metric, group_by: groupBy, chart, range_key: range, created_by_name: createdByName })
+        .select('id,created_at')
+        .single();
+
+      if (!error && data) {
+        setSaved(
+          [{ ...optimistic, id: data.id, createdAt: data.created_at, createdByName }, ...saved].slice(0, 50)
+        );
+        toast.success(`Laporan "${name}" tersimpan di server.`, 'Laporan Disimpan');
+        return;
+      }
+
+      toast.error(
+        `Gagal menyimpan ke server, disimpan lokal: ${error?.message ?? 'tidak diketahui'}`,
+        'Disimpan Lokal'
+      );
+      persistLocal([optimistic, ...saved].slice(0, 12));
+      return;
+    }
+
+    persistLocal([optimistic, ...saved].slice(0, 12));
   }
 
   function applyReport(item: SavedReport) {
     setMetric(item.metric);
     setGroupBy(item.groupBy);
-    setChart(item.groupBy === 'complaint' ? 'bars' : item.chart);
+    setChart(item.groupBy === 'complaint' || item.groupBy === 'medicine' ? 'bars' : item.chart);
     setRange(item.range);
   }
 
-  function chooseGroup(next: GroupBy) {
-    setGroupBy(next);
-    if (next === 'complaint') setChart('bars');
+  function chooseMetric(next: Metric) {
+    const nextIsMed = next === 'med_out' || next === 'med_in';
+    setMetric(next);
+    if (nextIsMed && groupBy !== 'month' && groupBy !== 'medicine') setGroupBy('medicine');
+    if (!nextIsMed && groupBy === 'medicine') setGroupBy('month');
   }
 
-  function deleteReport(id: string) {
-    persist(saved.filter((r) => r.id !== id));
+  function chooseGroup(next: GroupBy) {
+    if (next === 'medicine') {
+      if (metric !== 'med_out' && metric !== 'med_in') setMetric('med_out');
+    } else if (metric === 'med_out' || metric === 'med_in') {
+      setMetric('visits');
+    }
+    setGroupBy(next);
+    if (next === 'complaint' || next === 'medicine') setChart('bars');
+  }
+
+  async function deleteReport(id: string) {
+    if (savedSource === 'server') {
+      const { error } = await supabase.from('saved_reports').delete().eq('id', id);
+      if (!error) {
+        setSaved(saved.filter((r) => r.id !== id));
+        return;
+      }
+    }
+    persistLocal(saved.filter((r) => r.id !== id));
   }
 
   function exportBuilderCSV() {
@@ -494,6 +790,7 @@ export default function ReportsPage() {
     doc.text('Laporan Kunjungan UKS', 14, 22);
     doc.setFontSize(11);
     doc.text(`Periode: ${rangeInfo.label} | Dicetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 32);
+
     const rows = filtered.map((v) => [
       exportDate(v.check_in_at),
       exportTime(v.check_in_at),
@@ -503,42 +800,90 @@ export default function ReportsPage() {
       v.chief_complaint || '-',
       exportStatus(v.final_status),
     ]);
+
     (doc as any).autoTable({
       startY: 40,
       head: [['Tanggal', 'Jam', 'Siswa', 'NIS', 'Kelas', 'Keluhan', 'Status']],
       body: rows,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [59, 56, 104] },
     });
+
+    // Halaman baru khusus data obat: inventaris + riwayat keluar/masuk stok.
+    const visitById = new Map(visits.map((v) => [v.id, v]));
+
+    doc.addPage();
+    doc.setFontSize(16);
+    doc.text('Data Obat UKS', 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Periode: ${rangeInfo.label} | Dicetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 28);
+
+    doc.setFontSize(12);
+    doc.text('Inventaris Obat', 14, 38);
+    (doc as any).autoTable({
+      startY: 42,
+      head: [['Nama Obat', 'Kategori', 'Satuan', 'Stok', 'Min', 'Lokasi', 'Kedaluwarsa', 'Status']],
+      body: medicines.length
+        ? medicines.map((m) => [
+            m.name,
+            m.category || '-',
+            m.unit || '-',
+            String(m.stock ?? 0),
+            String(m.min_stock ?? 5),
+            m.location || '-',
+            m.expiry_date ? exportDate(m.expiry_date) : '-',
+            medicineStatus(m),
+          ])
+        : [['Belum ada data obat', '', '', '', '', '', '', '']],
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [59, 56, 104] },
+    });
+
+    let usageY = ((doc as any).lastAutoTable?.finalY ?? 42) + 14;
+    if (usageY > 250) {
+      doc.addPage();
+      usageY = 20;
+    }
+    doc.setFontSize(12);
+    doc.text('Riwayat Stok Obat', 14, usageY);
+
+    (doc as any).autoTable({
+      startY: usageY + 4,
+      head: [['Tanggal', 'Jam', 'Obat', 'Tipe', 'Jumlah', 'Siswa', 'Catatan']],
+      body: medicineLogs.length
+        ? medicineLogs.map((log) => {
+            const med = medicines.find((m) => m.id === log.medicine_id);
+            const visit = log.reference_id ? visitById.get(log.reference_id) : null;
+            return [
+              exportDate(log.created_at),
+              exportTime(log.created_at),
+              med?.name ?? '-',
+              log.type === 'out' ? 'Keluar' : 'Masuk',
+              log.type === 'out' ? `-${log.qty}` : `+${log.qty}`,
+              visit?.students?.full_name ?? '-',
+              log.notes || '-',
+            ];
+          })
+        : [['Belum ada riwayat stok', '', '', '', '', '', '']],
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [59, 56, 104] },
+    });
+
     doc.save(`laporan-uks-${range}-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
-  function exportExcel() {
-    const csv = [
-      ['Tanggal', 'Jam', 'Siswa', 'NIS', 'Kelas', 'Keluhan', 'Suhu', 'TD', 'Berat', 'Tinggi', 'Tindakan', 'Status Akhir', 'Catatan'],
-      ...filtered.map((v: any) => [
-        exportDate(v.check_in_at),
-        exportTime(v.check_in_at),
-        v.students?.full_name || '-',
-        v.students?.nis || '-',
-        v.students?.class || '-',
-        v.chief_complaint || '-',
-        v.temperature ?? '-',
-        v.blood_pressure ?? '-',
-        v.weight ?? '-',
-        v.height ?? '-',
-        v.treatment ?? '-',
-        exportStatus(v.final_status),
-        v.notes ?? '-',
-      ]),
-    ]
-      .map((r) => r.join('\t'))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'application/vnd.ms-excel' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `laporan-uks-${range}.xls`;
-    a.click();
-    URL.revokeObjectURL(url);
+  async function exportExcel() {
+    // Library Excel diunduh hanya saat tombol diklik.
+    try {
+      await exportReportsExcel({
+        visits: filtered,
+        medicines,
+        medicineLogs,
+        rangeKey: range,
+      });
+    } catch (error) {
+      toast.error(`Gagal mengekspor Excel: ${(error as Error).message}`, 'Ekspor Gagal');
+    }
   }
 
   return (
@@ -574,7 +919,7 @@ export default function ReportsPage() {
                   initial={false}
                 />
               )}
-              <span className="rpt__z">Overview</span>
+              <span className="rpt__z">Ringkasan</span>
             </button>
             <button
               type="button"
@@ -591,7 +936,7 @@ export default function ReportsPage() {
                   initial={false}
                 />
               )}
-              <span className="rpt__z">Report builder</span>
+              <span className="rpt__z">Pembuat Laporan</span>
             </button>
           </div>
         </LayoutGroup>
@@ -649,10 +994,12 @@ export default function ReportsPage() {
 
             <div className="rpt__kpi">
               <div className="rpt__kpi-label">
-                <CalendarDays className="ico" /> Rata-rata / hari
+                <CalendarDays className="ico" /> Rata-rata / hari aktif
               </div>
               <div className="rpt__kpi-value"><CountUp value={avgPerDay} decimals={1} /></div>
-              <div className="rpt__kpi-foot"><CountUp value={activeDays} /> hari ada kunjungan</div>
+              <div className="rpt__kpi-foot">
+                <CountUp value={total} /> kunjungan ÷ <CountUp value={activeDays} /> hari ada kunjungan
+              </div>
             </div>
 
             <div className="rpt__kpi">
@@ -672,7 +1019,7 @@ export default function ReportsPage() {
                 </h2>
                 <span className="rpt__datepill">{rangeInfo.label}</span>
               </div>
-              <AreaChart data={trend} id="rpt-area-overview" />
+              <AreaChart data={trend} />
             </div>
 
             <div className="card">
@@ -695,7 +1042,7 @@ export default function ReportsPage() {
                 ) : (
                   Object.entries(statusCounts).map(([status, count]) => {
                     const info = statusMap[status] ?? {
-                      label: status === 'unknown' ? 'Belum diisi' : status.replaceAll('_', ' '),
+                      label: visitStatusLabel(status === 'unknown' ? null : status),
                       color: 'var(--faint)',
                     };
                     const pct = total ? Math.round((count / total) * 100) : 0;
@@ -772,6 +1119,69 @@ export default function ReportsPage() {
             </div>
           </div>
 
+          <div className="rpt__grid rpt__grid--split">
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">
+                  <Pill className="ico" /> Pergerakan Stok Obat
+                </h2>
+                <div className="card__tools">
+                  <span className="spill spill--teal">
+                    <i /> <CountUp value={medInTotal} /> masuk
+                  </span>
+                  <span className="spill spill--rose">
+                    <i /> <CountUp value={medOutTotal} /> keluar
+                  </span>
+                </div>
+              </div>
+              {medInTotal + medOutTotal === 0 ? (
+                <div className="empty">
+                  <div className="empty__text">Belum ada pergerakan stok obat pada periode ini.</div>
+                </div>
+              ) : (
+                <MedicineMoveChart data={medMovement} config={medMoveConfig} />
+              )}
+            </div>
+
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">
+                  <Pill className="ico" /> Obat Paling Sering Diberikan
+                </h2>
+                <span className="spill spill--iris">
+                  <i /> <CountUp value={medRanking.length} /> teratas
+                </span>
+              </div>
+
+              {medRanking.length === 0 ? (
+                <div className="empty">
+                  <div className="empty__text">Belum ada obat yang diberikan pada periode ini.</div>
+                </div>
+              ) : (
+                <div className="rpt__lead">
+                  {medRanking.map((m, i) => (
+                    <div key={`${m.name}-${i}`} className="rpt__lrow">
+                      <span className="rpt__lrank">{i + 1}</span>
+                      <span className="rpt__ltext">
+                        <b>{m.name}</b>
+                        <small>
+                          masuk {m.masuk} · keluar {m.keluar}
+                        </small>
+                      </span>
+                      <span className="rpt__lbar">
+                        <span
+                          className="rpt__lfill"
+                          style={{ width: `${(m.keluar / medMaxOut) * 100}%`, animationDelay: `${i * 55}ms` }}
+                        />
+                      </span>
+                      <span className="rpt__lval"><CountUp value={m.keluar} /></span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">
@@ -802,7 +1212,7 @@ export default function ReportsPage() {
                     <th>Kelas</th>
                     <th className="r">Kunjungan</th>
                     <th>Relatif</th>
-                    <th className="r">Share</th>
+                    <th className="r">Porsi</th>
                   </tr>
                 </thead>
                 <tbody key={topSignature}>
@@ -857,11 +1267,11 @@ export default function ReportsPage() {
             <div className="card">
               <div className="card__head">
                 <h2 className="card__title">
-                  <BarChart3 className="ico" /> Build a Report
+                  <BarChart3 className="ico" /> Buat Laporan
                 </h2>
               </div>
 
-              <div className="rpt__plabel">Metric</div>
+              <div className="rpt__plabel">Metrik</div>
               <div className="rpt__metrics">
                 {metrics.map((m) => {
                   const Icon = m.icon;
@@ -872,7 +1282,7 @@ export default function ReportsPage() {
                       type="button"
                       className={active ? 'rpt__metric is-active' : 'rpt__metric'}
                       aria-pressed={active}
-                      onClick={() => setMetric(m.key)}
+                      onClick={() => chooseMetric(m.key)}
                     >
                       <span className="rpt__mico">
                         <Icon className="ico" strokeWidth={1.7} />
@@ -886,7 +1296,7 @@ export default function ReportsPage() {
                 })}
               </div>
 
-              <div className="rpt__plabel">Group by</div>
+              <div className="rpt__plabel">Kelompokkan</div>
               <LayoutGroup id="rpt-group">
                 <div className="rpt__seg">
                   {groupOptions.map((g) => (
@@ -911,18 +1321,18 @@ export default function ReportsPage() {
                 </div>
               </LayoutGroup>
 
-              <div className="rpt__plabel">Chart</div>
+              <div className="rpt__plabel">Grafik</div>
               <LayoutGroup id="rpt-chart">
                 <div className="rpt__seg">
                   <button
                     type="button"
                     className={chart === 'area' ? 'is-active' : ''}
                     aria-pressed={chart === 'area'}
-                    disabled={groupBy === 'complaint'}
-                    title={groupBy === 'complaint' ? 'Area tidak cocok untuk data keluhan. Gunakan Bars.' : undefined}
+                    disabled={areaDisabled}
+                    title={areaDisabled ? 'Area tidak cocok untuk data ini. Gunakan Batang.' : undefined}
                     onClick={() => setChart('area')}
                   >
-                    {chart === 'area' && groupBy !== 'complaint' && (
+                    {chart === 'area' && !areaDisabled && (
                       <motion.span
                         layoutId="rpt-chart-pill"
                         className="rpt__segpill"
@@ -946,12 +1356,15 @@ export default function ReportsPage() {
                         initial={false}
                       />
                     )}
-                    <span className="rpt__z">Bars</span>
+                    <span className="rpt__z">Batang</span>
                   </button>
                 </div>
               </LayoutGroup>
-              {groupBy === 'complaint' && (
-                <div className="rpt__tiny">Area dinonaktifkan untuk keluhan — otomatis memakai Bars.</div>
+              {areaDisabled && (
+                <div className="rpt__tiny">
+                  Area dinonaktifkan untuk {groupBy === 'medicine' ? 'data per obat' : 'keluhan'} — otomatis memakai
+                  Batang.
+                </div>
               )}
 
               <div className="rpt__pactions">
@@ -969,7 +1382,19 @@ export default function ReportsPage() {
                 <h2 className="card__title">
                   <Star className="ico" /> Laporan Tersimpan
                 </h2>
-                <span className="badge badge--plain"><CountUp value={saved.length} /></span>
+                <div className="card__tools">
+                  <span
+                    className="spill spill--iris"
+                    title={
+                      savedSource === 'server'
+                        ? 'Tersimpan di server — bisa dilihat staf lain sekolah ini.'
+                        : 'Tabel saved_reports belum ada — laporan hanya tersimpan di peramban ini.'
+                    }
+                  >
+                    <i /> {savedSource === 'server' ? 'Server' : 'Lokal'}
+                  </span>
+                  <span className="badge badge--plain"><CountUp value={saved.length} /></span>
+                </div>
               </div>
 
               {saved.length === 0 ? (
@@ -1044,10 +1469,14 @@ export default function ReportsPage() {
                 <div className="empty">
                   <BarChart3 className="ico" />
                   <div className="empty__title">Belum ada data</div>
-                  <div className="empty__text">Tidak ada kunjungan pada periode ini.</div>
+                  <div className="empty__text">
+                    {isMedicineMetric
+                      ? 'Tidak ada pergerakan obat pada periode ini.'
+                      : 'Tidak ada kunjungan pada periode ini.'}
+                  </div>
                 </div>
               ) : chart === 'area' ? (
-                <AreaChart data={builderGroups} id="rpt-area-builder" />
+                <AreaChart data={builderGroups} />
               ) : (
                 <BarsChart data={builderGroups} />
               )}
@@ -1061,7 +1490,7 @@ export default function ReportsPage() {
                         <th>{groupInfo.label}</th>
                         <th className="r">{metricInfo.label}</th>
                         <th>Relatif</th>
-                        <th className="r">Share</th>
+                        <th className="r">Porsi</th>
                       </tr>
                     </thead>
                     <tbody key={builderSignature}>

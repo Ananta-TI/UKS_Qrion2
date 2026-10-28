@@ -40,7 +40,7 @@ export default async function AdminHomePage({
     supabase.from('profiles').select('email,school_id').eq('role', 'school_admin'),
   ]);
 
-  const schools = (schoolsData ?? []) as SchoolRow[];
+  const schools = (schoolsData ?? []) as unknown as SchoolRow[];
   const accountBySchool = new Map<string, string>();
   for (const a of accountsData ?? []) {
     if (a.school_id) accountBySchool.set(a.school_id, a.email ?? '-');

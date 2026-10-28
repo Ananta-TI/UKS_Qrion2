@@ -526,18 +526,7 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
   top: var(--gap);
 }
 .adm__brand { align-items: center; gap: 11px; display: flex; padding: 2px 4px 4px; }
-.adm__mark {
-  background: color-mix(in srgb, var(--iris) 20%, transparent);
-  color: var(--primary-ink);
-  border: 1px solid color-mix(in srgb, var(--iris) 30%, transparent);
-  border-radius: 12px;
-  flex: none;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  display: grid;
-}
-.adm__mark .ico { width: 21px; height: 21px; }
+.adm__logo { flex: none; width: 40px; height: 40px; border-radius: 12px; }
 .adm__brand b { font-size: var(--fs-xl); letter-spacing: -.01em; font-weight: 700; line-height: 1.15; display: block; }
 .adm__brand small { color: var(--muted); font-size: var(--fs-2xs); letter-spacing: .08em; text-transform: uppercase; font-weight: 700; display: block; }
 .adm__nav { flex-direction: column; gap: 4px; display: flex; }
@@ -1413,4 +1402,85 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
 @media (width <= 1180px) { .page-skeleton__cards { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) {
   .page-enter, .skel::after { animation: none; }
+}
+
+/* Lonceng notifikasi stok obat (stok menipis & kedaluwarsa). */
+.notif { position: relative; flex: none; }
+.notif__btn { position: relative; width: 38px; height: 38px; flex: none; display: grid; place-items: center; border: 1px solid var(--rim); border-radius: 50%; background: var(--glass-2); color: var(--text); transition: background .15s var(--ease); }
+.notif__btn:hover { background: var(--glass-3); }
+.notif__btn .ico { width: 18px; height: 18px; }
+.notif__badge { position: absolute; top: -3px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 10px; font-weight: 800; line-height: 1; display: grid; place-items: center; }
+.notif__panel { position: fixed; z-index: 95; border-radius: 18px; background: var(--raised); border: 1px solid var(--line); box-shadow: var(--shadow-pop); overflow: hidden; }
+.notif__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 14px 14px 10px; }
+.notif__head b { font-size: var(--fs-md); }
+.notif__list { max-height: 320px; overflow: auto; padding: 0 6px 6px; }
+.notif__empty { display: grid; justify-items: center; gap: 6px; text-align: center; color: var(--muted); font-size: var(--fs-sm); padding: 26px 16px; }
+.notif__empty .ico { width: 26px; height: 26px; opacity: .7; color: var(--good); }
+.notif__item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 10px; border-radius: 12px; transition: background .15s var(--ease); }
+.notif__item:hover { background: var(--well); }
+.notif__item .ico { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+.notif__text { min-width: 0; }
+.notif__text b { display: block; font-size: var(--fs-sm); }
+.notif__text small { color: var(--muted); font-size: var(--fs-xs); }
+.notif__foot { display: block; text-align: center; padding: 11px; border-top: 1px solid var(--line); font-size: var(--fs-sm); font-weight: 700; color: var(--primary-ink); }
+.notif__foot:hover { background: var(--well); }
+
+/* Surat izin pulang — tampil seperti kertas, baik di layar maupun cetak. */
+.print-overlay { background: #0e1a1c66; }
+.print-sheet { background: #fff; color: #101418; border-radius: 18px; }
+.print-sheet__bar { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 22px 0; }
+.print-sheet__bar .btn--ghost { color: #253039; border-color: #d5dde2; }
+.print-sheet__bar .btn--ghost:hover { background: #eef2f4; }
+.print-sheet__doc { padding: 6px 30px 34px; }
+.print-sheet__masthead { text-align: center; border-bottom: 3px double #101418; padding-bottom: 12px; }
+.print-sheet__school { font-size: 20px; font-weight: 800; letter-spacing: -.01em; text-transform: uppercase; color: #101418; }
+.print-sheet__schoolsub { color: #4a5560; font-size: var(--fs-sm); margin-top: 3px; }
+.print-sheet__kind { text-align: center; font-size: var(--fs-xl); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; margin: 22px 0 5px; color: #101418; }
+.print-sheet__kindline { width: 220px; height: 2px; background: #101418; margin: 0 auto 20px; }
+.print-sheet__lead { font-size: var(--fs-md); margin: 0 0 14px; line-height: 1.65; color: #253039; }
+.print-sheet__fields { width: 100%; border-collapse: collapse; font-size: var(--fs-md); margin: 4px 0 14px; }
+.print-sheet__fields th { text-align: left; vertical-align: top; width: 156px; color: #4a5560; font-weight: 600; padding: 8px 10px 8px 0; }
+.print-sheet__fields td { vertical-align: top; padding: 8px 0; font-weight: 600; color: #101418; }
+.print-sheet__fields tr + tr th, .print-sheet__fields tr + tr td { border-top: 1px solid #dde3e6; }
+.print-sheet__sign { margin-top: 30px; display: flex; justify-content: flex-end; }
+.print-sheet__sign > div { text-align: center; min-width: 210px; color: #253039; }
+.print-sheet__signdate { font-size: var(--fs-sm); }
+.print-sheet__signrole { font-size: var(--fs-sm); color: #4a5560; margin-top: 3px; }
+.print-sheet__signname { margin-top: 58px; border-top: 1px solid #101418; padding-top: 5px; font-size: var(--fs-sm); font-weight: 700; color: #101418; }
+
+/* Pemilih obat pada form kunjungan. */
+.medpick { border: 1px solid var(--line); border-radius: 16px; background: var(--surface-2); overflow: hidden; }
+.medpick__search { display: flex; align-items: center; gap: 9px; height: 44px; padding: 0 14px; color: var(--muted); border-bottom: 1px solid var(--line); background: var(--glass-3); transition: background .15s var(--ease); }
+.medpick__search:focus-within { background: var(--raised); }
+.medpick__search .ico { width: 16px; height: 16px; flex: none; }
+.medpick__search input { width: 100%; height: 100%; border: 0; background: 0 0; outline: none; color: var(--text); font-size: var(--fs-md); }
+.medpick__body { padding: 10px; display: grid; gap: 8px; }
+.medpick__list { display: grid; gap: 2px; max-height: 240px; overflow: auto; }
+.medpick__opt { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 9px; border-radius: 11px; transition: background .15s var(--ease); }
+.medpick__opt:hover { background: var(--well); }
+.medpick__opt .grow { min-width: 0; }
+.medpick__opt b { display: block; font-size: var(--fs-sm); }
+.medpick__opt small { color: var(--muted); font-size: var(--fs-xs); }
+.medpick__hint { color: var(--faint); font-size: var(--fs-xs); padding: 0 2px; }
+.medpick__empty { color: var(--faint); font-size: var(--fs-sm); padding: 4px 2px; }
+.medpick__selhead { color: var(--faint); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 2px 2px 0; }
+.medpick__sel { display: grid; gap: 6px; }
+.medpick__selrow { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 10px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--raised); }
+.medpick__selrow .grow { min-width: 0; }
+.medpick__selrow b { display: block; font-size: var(--fs-sm); }
+.medpick__selrow small { color: var(--muted); font-size: var(--fs-xs); }
+.medpick__qty { display: flex; align-items: center; gap: 6px; flex: none; }
+.medpick__qty > b { min-width: 22px; text-align: center; }
+.medpick__qty .ibtn { width: 32px; height: 32px; }
+.medpick__qty .ibtn .ico { width: 15px; height: 15px; }
+
+@media print {
+  @page { margin: 14mm; }
+  html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
+  /* Sembunyikan seluruh aplikasi, sisakan hanya lembar cetak (portal di body).
+     Memakai display: none agar tidak ada ruang kosong yang memicu halaman tambahan. */
+  body > *:not(.print-overlay) { display: none !important; }
+  .print-overlay { position: static !important; display: block !important; inset: auto !important; padding: 0 !important; margin: 0 !important; background: #fff !important; backdrop-filter: none !important; }
+  .print-sheet { width: 100% !important; max-width: none !important; max-height: none !important; overflow: visible !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; background: #fff !important; }
+  .print-sheet__noprint { display: none !important; }
 }

@@ -16,6 +16,7 @@ import {
   UserRound,
   LifeBuoy,
   Settings,
+  Activity,
 } from 'lucide-react';
 
 const pages = [
@@ -25,6 +26,7 @@ const pages = [
   { label: 'Catat Kunjungan', sub: 'Form pemeriksaan & tindakan', href: '/visits/new', icon: Plus },
   { label: 'Inventaris', sub: 'Stok obat & kedaluwarsa', href: '/inventory', icon: Package },
   { label: 'Laporan', sub: 'Statistik & export PDF/Excel', href: '/reports', icon: BarChart3 },
+  { label: 'Log Aktivitas', sub: 'Riwayat aktivitas staf UKS', href: '/activity', icon: Activity },
   { label: 'Pengaturan', sub: 'Profil sekolah, pengguna, dan data', href: '/settings', icon: Settings },
   { label: 'Pusat Bantuan', sub: 'Panduan, FAQ, dan kontak admin', href: '/support', icon: LifeBuoy },
 ];

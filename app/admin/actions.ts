@@ -255,6 +255,56 @@ export async function resetPassword(formData: FormData) {
   redirect(`/admin/schools/${schoolId}?ok=` + encodeURIComponent('Password akun sekolah diperbarui.'));
 }
 
+export async function seedDefaultMedicines(formData: FormData) {
+  const schoolId = String(formData.get('school_id') ?? '');
+  if (!schoolId) fail('/admin', 'ID sekolah tidak valid.');
+
+  const { supabase, user, profile } = await requireSuperAdmin();
+
+  const { data: school } = await supabase
+    .from('schools')
+    .select('name')
+    .eq('id', schoolId)
+    .maybeSingle();
+
+  if (!school) fail('/admin', 'Sekolah tidak ditemukan.');
+
+  const { data, error } = await supabase.rpc('seed_default_medicines', { p_school: schoolId });
+
+  if (error) {
+    fail(
+      `/admin/schools/${schoolId}`,
+      `Gagal mengisi obat bawaan: ${error.message}. Pastikan migrasi 005 sudah dijalankan.`
+    );
+  }
+
+  const inserted = (data as number | null) ?? 0;
+
+  await logActivity({
+    schoolId,
+    actorId: user.id,
+    actorName: profile?.full_name ?? user.email,
+    action: 'create',
+    entity: 'medicine',
+    summary:
+      inserted > 0
+        ? `Mengisi ${inserted} obat bawaan untuk ${school.name}`
+        : `Obat bawaan ${school.name} sudah ada, tidak ada yang ditambahkan`,
+    metadata: { inserted },
+  });
+
+  revalidatePath(`/admin/schools/${schoolId}`);
+  revalidatePath('/admin');
+  redirect(
+    `/admin/schools/${schoolId}?ok=` +
+      encodeURIComponent(
+        inserted > 0
+          ? `${inserted} obat bawaan berhasil ditambahkan.`
+          : 'Sekolah ini sudah memiliki daftar obat.'
+      )
+  );
+}
+
 export async function deleteSchool(formData: FormData) {
   const schoolId = String(formData.get('school_id') ?? '');
   if (!schoolId) fail('/admin', 'ID sekolah tidak valid.');

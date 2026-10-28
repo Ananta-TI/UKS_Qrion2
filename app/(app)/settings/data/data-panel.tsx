@@ -12,6 +12,7 @@ import {
 import { CountUp } from '@/components/ui/count-up';
 import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
+import { fetchAllRows } from '@/lib/supabase/paginate';
 
 type Counts = {
   students: number | null;
@@ -57,10 +58,30 @@ export function DataPanel({ schoolId, schoolName }: { schoolId: string; schoolNa
     const supabase = createClient();
 
     const [students, visits, medicines, logs] = await Promise.all([
-      supabase.from('students').select('*').eq('school_id', schoolId).order('full_name'),
-      supabase.from('visits').select('*').eq('school_id', schoolId).order('check_in_at', { ascending: false }),
-      supabase.from('medicines').select('*').eq('school_id', schoolId).order('name'),
-      supabase.from('medicine_logs').select('*').eq('school_id', schoolId).order('created_at', { ascending: false }),
+      fetchAllRows((from, to) =>
+        supabase.from('students').select('*').eq('school_id', schoolId).order('full_name').order('id').range(from, to)
+      ),
+      fetchAllRows((from, to) =>
+        supabase
+          .from('visits')
+          .select('*')
+          .eq('school_id', schoolId)
+          .order('check_in_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to)
+      ),
+      fetchAllRows((from, to) =>
+        supabase.from('medicines').select('*').eq('school_id', schoolId).order('name').order('id').range(from, to)
+      ),
+      fetchAllRows((from, to) =>
+        supabase
+          .from('medicine_logs')
+          .select('*')
+          .eq('school_id', schoolId)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to)
+      ),
     ]);
 
     if (students.error || visits.error || medicines.error || logs.error) {
@@ -72,10 +93,10 @@ export function DataPanel({ schoolId, schoolName }: { schoolId: string; schoolNa
     const payload = {
       exported_at: new Date().toISOString(),
       school: { id: schoolId, name: schoolName },
-      students: students.data ?? [],
-      visits: visits.data ?? [],
-      medicines: medicines.data ?? [],
-      medicine_logs: logs.data ?? [],
+      students: students.data,
+      visits: visits.data,
+      medicines: medicines.data,
+      medicine_logs: logs.data,
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });

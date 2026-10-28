@@ -82,9 +82,7 @@ export function YearChart({ points }: { points: YearPoint[] }) {
     useMemo(() => {
       const stepX = (RIGHT - LEFT) / Math.max(1, months.length - 1);
       const primaryValues = months.map((month) =>
-        series === 'total'
-          ? month.total
-          : (month.returned ?? Math.max(0, month.total - (month.referred ?? 0)))
+        series === 'total' ? month.total : (month.returned ?? 0)
       );
       const secondaryValues = months.map((month) => month.referred ?? 0);
       const scaleMax = niceMax(Math.max(0, ...primaryValues, ...secondaryValues));
@@ -304,7 +302,7 @@ export function YearChart({ points }: { points: YearPoint[] }) {
         </span>
         <span className="muted">
           · {months[nowMonthIndex].label} adalah bulan berjalan ({primary[nowMonthIndex].toLocaleString('id-ID')}{' '}
-          {series === 'total' ? 'kunjungan' : 'siswa'})
+          {series === 'total' ? 'kunjungan' : 'kembali ke kelas'})
         </span>
       </div>
 

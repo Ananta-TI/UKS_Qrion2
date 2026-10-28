@@ -7,12 +7,14 @@ import { usePathname } from 'next/navigation';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { CommandPalette } from '@/components/layout/command-palette';
 import { SettingsRail } from '@/components/layout/settings-rail';
+import { NotificationsBell } from '@/components/layout/notifications-bell';
 import {
   LayoutDashboard,
   Users,
   Stethoscope,
   Package,
   BarChart3,
+  Activity,
   LogOut,
   Search,
   Plus,
@@ -32,6 +34,7 @@ const tabs = [
   { href: '/visits', label: 'Kunjungan', icon: Stethoscope },
   { href: '/inventory', label: 'Inventaris', icon: Package },
   { href: '/reports', label: 'Laporan', icon: BarChart3 },
+  { href: '/activity', label: 'Aktivitas', icon: Activity },
 ];
 
 const utilityTabs = [
@@ -163,6 +166,7 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
             className="brand__img"
           />
         </Link>
+        <NotificationsBell />
         <button
           type="button"
           className="mobilebar__icon"
@@ -204,14 +208,17 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
                 className="brand__img"
               />
             </Link>
-            <button
-              type="button"
-              className="sidebar__close"
-              onClick={() => setDrawerOpen(false)}
-              aria-label="Tutup menu"
-            >
-              <X className="ico" strokeWidth={1.8} />
-            </button>
+            <div className="flex items-center gap-2">
+              <NotificationsBell />
+              <button
+                type="button"
+                className="sidebar__close"
+                onClick={() => setDrawerOpen(false)}
+                aria-label="Tutup menu"
+              >
+                <X className="ico" strokeWidth={1.8} />
+              </button>
+            </div>
           </div>
 
           <div className="sidebar__scroll">

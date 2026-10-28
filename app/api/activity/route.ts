@@ -11,7 +11,6 @@ const allowed = new Set<ActivityAction>([
   'restock',
   'stock_out',
   'export',
-  'reset',
 ]);
 
 function clean(value: unknown, max: number) {

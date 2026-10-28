@@ -1,4 +1,5 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/lib/database.types';
 
 function keyRole(key: string): string | null {
   if (key.startsWith('sb_secret_')) return 'service_role';
@@ -30,7 +31,7 @@ export function createAdminClient() {
     );
   }
 
-  return createSupabaseClient(url, key, {
+  return createSupabaseClient<Database>(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }

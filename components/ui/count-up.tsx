@@ -13,7 +13,7 @@ type CountUpProps = {
 
 function format(value: number, decimals: number) {
   const safe = Number.isFinite(value) ? value : 0;
-  return safe.toLocaleString('en-US', {
+  return safe.toLocaleString('id-ID', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });

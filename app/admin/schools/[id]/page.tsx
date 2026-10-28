@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getSessionProfile } from '@/lib/auth';
-import { updateSchool, resetPassword, deleteSchool, impersonateSchool, createSchoolAccount } from '../../actions';
+import { updateSchool, resetPassword, deleteSchool, impersonateSchool, createSchoolAccount, seedDefaultMedicines } from '../../actions';
 import { ConfirmSubmit } from '@/components/admin/confirm-submit';
 import {
   AlertCircle,
@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   KeyRound,
   LogIn,
+  Pill,
   Trash2,
 } from 'lucide-react';
 
@@ -201,13 +202,30 @@ export default async function SchoolDetailPage({
             )}
           </div>
 
+          <div className="card">
+            <div className="card__head">
+              <h2 className="card__title">
+                <Pill className="ico" /> Inventaris Obat
+              </h2>
+            </div>
+            <p className="field__hint" style={{ marginBottom: 12 }}>
+              Isi daftar obat bawaan UKS (Paracetamol, Oralit, Plester, dll.) untuk sekolah yang masih
+              kosong. Sekolah yang sudah punya obat tidak akan ditimpa.
+            </p>
+            <form action={seedDefaultMedicines}>
+              <input type="hidden" name="school_id" value={school.id} />
+              <button type="submit" className="btn btn--soft btn--sm w-full">
+                <Pill className="ico" /> Isi obat bawaan
+              </button>
+            </form>
+          </div>
+
           <div className="card adm__danger">
             <div className="card__head">
               <h2 className="card__title">
                 <Trash2 className="ico" /> Zona Berbahaya
               </h2>
-            </div>
-            <p className="field__hint">
+            </div>            <p className="field__hint">
               Menghapus sekolah akan menghapus seluruh siswa, kunjungan, obat, dan akun adminnya. Tindakan ini tidak bisa dibatalkan.
             </p>
             <form action={deleteSchool} className="mt-4">

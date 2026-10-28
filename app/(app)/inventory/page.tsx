@@ -7,6 +7,7 @@ import { logClientActivity } from '@/lib/activity-client';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import { useToast } from '@/components/ui/toast';
+import type { MedicineRow, MedicineUnit, StockOpnameResult } from '@/lib/database.types';
 import {
   Package,
   Plus,
@@ -16,6 +17,9 @@ import {
   X,
   Save,
   TrendingUp,
+  Pencil,
+  Trash2,
+  ClipboardCheck,
 } from 'lucide-react';
 
 type Filter = 'all' | 'low' | 'expiring';
@@ -25,22 +29,29 @@ function InventoryPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [medicines, setMedicines] = useState<any[]>([]);
+  const [medicines, setMedicines] = useState<MedicineRow[]>([]);
   const [now, setNow] = useState(0);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<MedicineRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: '',
     category: '',
-    unit: 'pcs' as 'strip' | 'botol' | 'pcs',
+    unit: 'pcs' as MedicineUnit,
     stock: '',
     min_stock: '5',
     location: '',
     expiry_date: '',
   });
+
+  // Stok opname: sesuaikan stok ke hasil hitung fisik.
+  const [opnameFor, setOpnameFor] = useState<MedicineRow | null>(null);
+  const [opnameQty, setOpnameQty] = useState('');
+  const [opnameNote, setOpnameNote] = useState('');
+  const [opnameSaving, setOpnameSaving] = useState(false);
 
   async function load() {
     const { data } = await supabase.from('medicines').select('*').order('name', { ascending: true });
@@ -58,26 +69,35 @@ function InventoryPageInner() {
   useEffect(() => {
     if (searchParams.get('add') !== '1') return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEditing(null);
     setOpen(true);
     router.replace('/inventory', { scroll: false });
   }, [searchParams, router]);
 
-  const lowOf = (m: any) => (m.stock ?? 0) <= (m.min_stock ?? 5);
-  const expiringOf = (m: any) => {
+  const lowOf = (m: MedicineRow) => (m.stock ?? 0) <= (m.min_stock ?? 5);
+  const expiredOf = (m: MedicineRow) => {
+    if (!m.expiry_date) return false;
+    return new Date(m.expiry_date).getTime() <= now;
+  };
+  const expiringOf = (m: MedicineRow) => {
     if (!m.expiry_date) return false;
     const diff = new Date(m.expiry_date).getTime() - now;
     return diff > 0 && diff <= 30 * 24 * 60 * 60 * 1000;
   };
+  const expiryWarningOf = (m: MedicineRow) => expiredOf(m) || expiringOf(m);
 
   const lowStock = medicines.filter(lowOf).length;
-  const expiring = medicines.filter(expiringOf).length;
+  const expiring = medicines.filter(expiryWarningOf).length;
 
   const filtered = medicines.filter((m) => {
     const matchQ =
       !query ||
       m.name.toLowerCase().includes(query.toLowerCase()) ||
       (m.category ?? '').toLowerCase().includes(query.toLowerCase());
-    const matchF = filter === 'all' || (filter === 'low' && lowOf(m)) || (filter === 'expiring' && expiringOf(m));
+    const matchF =
+      filter === 'all' ||
+      (filter === 'low' && lowOf(m)) ||
+      (filter === 'expiring' && expiryWarningOf(m));
     return matchQ && matchF;
   });
 
@@ -93,6 +113,11 @@ function InventoryPageInner() {
     }
 
     await supabase.from('medicine_logs').insert({ medicine_id: id, type: 'in', qty, notes: 'Restok' });
+    // Catat batch penerimaan bila tabel tersedia (abaikan bila belum dimigrasi).
+    await supabase
+      .from('medicine_batches')
+      .insert({ medicine_id: id, qty, expiry_date: m?.expiry_date ?? null, notes: 'Restok' });
+
     await logClientActivity({
       action: 'restock',
       entity: 'medicine',
@@ -104,47 +129,209 @@ function InventoryPageInner() {
     load();
   }
 
-  async function createMedicine() {
-    if (!form.name) return;
-    setSaving(true);
-    const { data: created, error } = await supabase
-      .from('medicines')
-      .insert({
-        name: form.name,
-        category: form.category || null,
-        unit: form.unit,
-        stock: parseInt(form.stock || '0', 10),
-        min_stock: parseInt(form.min_stock || '5', 10),
-        location: form.location || null,
-        expiry_date: form.expiry_date || null,
-      })
-      .select('id')
-      .single();
-    setSaving(false);
+  function openOpname(m: MedicineRow) {
+    setOpnameFor(m);
+    setOpnameQty(String(m.stock ?? 0));
+    setOpnameNote('');
+  }
+
+  async function saveOpname() {
+    if (!opnameFor) return;
+
+    const counted = parseInt(opnameQty, 10);
+    if (Number.isNaN(counted) || counted < 0) {
+      toast.error('Jumlah hasil hitung tidak valid.', 'Opname Gagal');
+      return;
+    }
+
+    setOpnameSaving(true);
+    const before = opnameFor.stock ?? 0;
+    let diff = counted - before;
+
+    // Jalur utama: RPC yang juga menyesuaikan batch secara FIFO.
+    const { data, error } = await supabase.rpc('apply_stock_opname', {
+      p_medicine: opnameFor.id,
+      p_counted: counted,
+      p_note: opnameNote.trim() || null,
+    });
+
     if (error) {
-      toast.error(`Gagal menambah obat: ${error.message}`, 'Obat Gagal Ditambahkan');
+      // Fallback bila RPC belum dimigrasi.
+      const { error: updateError } = await supabase
+        .from('medicines')
+        .update({ stock: counted })
+        .eq('id', opnameFor.id);
+
+      if (updateError) {
+        setOpnameSaving(false);
+        toast.error(`Gagal menyimpan opname: ${updateError.message}`, 'Opname Gagal');
+        return;
+      }
+
+      if (diff !== 0) {
+        await supabase.from('medicine_logs').insert({
+          medicine_id: opnameFor.id,
+          type: diff > 0 ? 'in' : 'out',
+          qty: Math.abs(diff),
+          notes: opnameNote.trim() || 'Penyesuaian stok opname',
+        });
+      }
+    } else {
+      const result = data as unknown as StockOpnameResult;
+      if (result && result.ok === false) {
+        setOpnameSaving(false);
+        toast.error('Opname ditolak server (data tidak ditemukan).', 'Opname Gagal');
+        return;
+      }
+      diff = result?.diff ?? diff;
+    }
+
+    await logClientActivity({
+      action: 'update',
+      entity: 'medicine',
+      entityId: opnameFor.id,
+      summary: `Stok opname ${opnameFor.name}: ${before} → ${counted}`,
+      metadata: { stock_before: before, stock_after: counted, diff },
+    });
+
+    setOpnameSaving(false);
+    setOpnameFor(null);
+    toast.success(
+      diff === 0
+        ? `Stok ${opnameFor.name} sudah sesuai hasil hitung.`
+        : `Stok ${opnameFor.name} disesuaikan (${diff > 0 ? '+' : ''}${diff}).`,
+      'Opname Selesai'
+    );
+    load();
+  }
+
+  const emptyForm = {
+    name: '',
+    category: '',
+    unit: 'pcs' as MedicineUnit,
+    stock: '',
+    min_stock: '5',
+    location: '',
+    expiry_date: '',
+  };
+
+  function openCreate() {
+    setEditing(null);
+    setForm(emptyForm);
+    setOpen(true);
+  }
+
+  function openEdit(m: MedicineRow) {
+    setEditing(m);
+    setForm({
+      name: m.name ?? '',
+      category: m.category ?? '',
+      unit: (m.unit ?? 'pcs') as MedicineUnit,
+      stock: String(m.stock ?? 0),
+      min_stock: String(m.min_stock ?? 5),
+      location: m.location ?? '',
+      expiry_date: m.expiry_date ?? '',
+    });
+    setOpen(true);
+  }
+
+  async function saveMedicine() {
+    const name = form.name.trim();
+    if (!name) {
+      toast.error('Nama obat wajib diisi.', 'Obat Gagal Disimpan');
+      return;
+    }
+
+    setSaving(true);
+
+    const payload = {
+      name,
+      category: form.category.trim() || null,
+      unit: form.unit,
+      stock: parseInt(form.stock || '0', 10) || 0,
+      min_stock: parseInt(form.min_stock || '5', 10) || 0,
+      location: form.location.trim() || null,
+      expiry_date: form.expiry_date || null,
+    };
+
+    if (editing) {
+      const { error } = await supabase.from('medicines').update(payload).eq('id', editing.id);
+      setSaving(false);
+      if (error) {
+        toast.error(`Gagal menyimpan perubahan: ${error.message}`, 'Obat Gagal Disimpan');
+        return;
+      }
+      await logClientActivity({
+        action: 'update',
+        entity: 'medicine',
+        entityId: editing.id,
+        summary: `Mengubah data obat ${name}`,
+        metadata: { stock_before: editing.stock ?? 0, stock_after: payload.stock },
+      });
+      toast.success(`Obat ${name} berhasil diperbarui.`, 'Perubahan Disimpan');
+    } else {
+      const { data: created, error } = await supabase
+        .from('medicines')
+        .insert(payload)
+        .select('id')
+        .single();
+      setSaving(false);
+      if (error) {
+        toast.error(`Gagal menambah obat: ${error.message}`, 'Obat Gagal Ditambahkan');
+        return;
+      }
+      await logClientActivity({
+        action: 'create',
+        entity: 'medicine',
+        entityId: (created as { id: string } | null)?.id ?? null,
+        summary: `Menambahkan obat ${name}`,
+        metadata: { category: payload.category, stock: payload.stock },
+      });
+      toast.success(`Obat ${name} berhasil ditambahkan.`, 'Obat Ditambahkan');
+    }
+
+    setOpen(false);
+    setEditing(null);
+    setForm(emptyForm);
+    load();
+  }
+
+  async function removeMedicine(m: MedicineRow) {
+    const ok = window.confirm(
+      `Hapus obat ${m.name}? Riwayat keluar/masuk stok obat ini juga akan terhapus dan tidak bisa dikembalikan.`
+    );
+    if (!ok) return;
+
+    const { error } = await supabase.from('medicines').delete().eq('id', m.id);
+    if (error) {
+      toast.error(`Gagal menghapus ${m.name}: ${error.message}`, 'Obat Gagal Dihapus');
       return;
     }
 
     await logClientActivity({
-      action: 'create',
+      action: 'delete',
       entity: 'medicine',
-      entityId: (created as { id: string } | null)?.id ?? null,
-      summary: `Menambahkan obat ${form.name}`,
-      metadata: { category: form.category || null, stock: parseInt(form.stock || '0', 10) },
+      entityId: m.id,
+      summary: `Menghapus obat ${m.name}`,
+      metadata: { category: m.category ?? null, stock: m.stock ?? 0 },
     });
-    toast.success(`Obat ${form.name} berhasil ditambahkan.`, 'Obat Ditambahkan');
-    setOpen(false);
-    setForm({ name: '', category: '', unit: 'pcs', stock: '', min_stock: '5', location: '', expiry_date: '' });
+    toast.success(`${m.name} berhasil dihapus.`, 'Obat Dihapus');
     load();
   }
+
+  const opnameCounted = parseInt(opnameQty, 10);
+  const opnameDiff = opnameFor
+    ? Number.isNaN(opnameCounted)
+      ? 0
+      : opnameCounted - (opnameFor.stock ?? 0)
+    : 0;
 
   return (
     <AppShell
       title="Inventaris Obat"
       crumbs={[{ label: 'UKS', href: '/' }, { label: 'Inventaris' }]}
       actions={
-        <button type="button" className="btn btn--primary" onClick={() => setOpen(true)}>
+        <button type="button" className="btn btn--primary" onClick={openCreate}>
           <Plus className="ico" /> Tambah Obat
         </button>
       }
@@ -159,7 +346,7 @@ function InventoryPageInner() {
           <div className="stat__value"><CountUp value={lowStock} /></div>
         </div>
         <div className="stat">
-          <div className="stat__label"><span className="stat__ico"><Clock className="ico" /></span>Kedaluwarsa ≤ 30 hari</div>
+          <div className="stat__label"><span className="stat__ico"><Clock className="ico" /></span>Kedaluwarsa / ≤ 30 hari</div>
           <div className="stat__value"><CountUp value={expiring} /></div>
         </div>
       </section>
@@ -218,7 +405,7 @@ function InventoryPageInner() {
                 ) : (
                   filtered.map((m) => {
                     const low = lowOf(m);
-                    const exp = expiringOf(m);
+                    const exp = expiryWarningOf(m);
                     return (
                       <tr key={m.id}>
                         <td><b>{m.name}</b></td>
@@ -238,9 +425,39 @@ function InventoryPageInner() {
                           )}
                         </td>
                         <td className="r">
-                          <button type="button" className="btn btn--ghost btn--xs" onClick={() => addStock(m.id, 1)}>
-                            <TrendingUp className="ico" /> +1 Stok
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button type="button" className="btn btn--ghost btn--xs" onClick={() => addStock(m.id, 1)}>
+                              <TrendingUp className="ico" /> +1 Stok
+                            </button>
+                            <button
+                              type="button"
+                              className="ibtn"
+                              onClick={() => openOpname(m)}
+                              aria-label={`Stok opname ${m.name}`}
+                              title="Stok opname"
+                            >
+                              <ClipboardCheck className="ico" strokeWidth={1.7} />
+                            </button>
+                            <button
+                              type="button"
+                              className="ibtn"
+                              onClick={() => openEdit(m)}
+                              aria-label={`Edit ${m.name}`}
+                              title="Edit obat"
+                            >
+                              <Pencil className="ico" strokeWidth={1.7} />
+                            </button>
+                            <button
+                              type="button"
+                              className="ibtn"
+                              onClick={() => removeMedicine(m)}
+                              aria-label={`Hapus ${m.name}`}
+                              title="Hapus obat"
+                              style={{ color: 'var(--bad)' }}
+                            >
+                              <Trash2 className="ico" strokeWidth={1.7} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -254,11 +471,13 @@ function InventoryPageInner() {
 
       {open && (
         <div className="overlay" onClick={() => setOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Tambah obat">
+          <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={editing ? 'Edit obat' : 'Tambah obat'}>
             <div className="sheet__head">
               <div>
-                <div className="sheet__title">Tambah Obat Baru</div>
-                <div className="sheet__sub">Lengkapi data obat dan stok awal.</div>
+                <div className="sheet__title">{editing ? 'Edit Obat' : 'Tambah Obat Baru'}</div>
+                <div className="sheet__sub">
+                  {editing ? 'Ubah data obat atau stok saat ini.' : 'Lengkapi data obat dan stok awal.'}
+                </div>
               </div>
               <button type="button" className="ibtn" onClick={() => setOpen(false)} aria-label="Tutup">
                 <X className="ico" />
@@ -276,7 +495,7 @@ function InventoryPageInner() {
                 </div>
                 <div className="field">
                   <label className="field__label">Satuan</label>
-                  <select className="input" style={{ borderRadius: 12 }} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value as any })}>
+                  <select className="input" style={{ borderRadius: 12 }} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value as MedicineUnit })}>
                     <option value="strip">Strip</option>
                     <option value="botol">Botol</option>
                     <option value="pcs">Pcs</option>
@@ -302,8 +521,79 @@ function InventoryPageInner() {
             </div>
             <div className="sheet__foot">
               <button type="button" className="btn btn--ghost" onClick={() => setOpen(false)}>Batal</button>
-              <button type="button" className="btn btn--primary" onClick={createMedicine} disabled={!form.name || saving}>
-                <Save className="ico" /> {saving ? 'Menyimpan…' : 'Simpan'}
+              <button type="button" className="btn btn--primary" onClick={saveMedicine} disabled={!form.name || saving}>
+                <Save className="ico" /> {saving ? 'Menyimpan…' : editing ? 'Simpan Perubahan' : 'Simpan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {opnameFor && (
+        <div className="overlay" onClick={() => setOpnameFor(null)}>
+          <div
+            className="sheet"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Stok opname"
+          >
+            <div className="sheet__head">
+              <div>
+                <div className="sheet__title">Stok Opname</div>
+                <div className="sheet__sub">Sesuaikan stok {opnameFor.name} dengan hasil hitung fisik.</div>
+              </div>
+              <button type="button" className="ibtn" onClick={() => setOpnameFor(null)} aria-label="Tutup">
+                <X className="ico" />
+              </button>
+            </div>
+            <div className="sheet__body">
+              <div className="note">
+                <ClipboardCheck className="ico" />
+                <div>
+                  Stok tercatat: <b>{opnameFor.stock ?? 0} {opnameFor.unit ?? ''}</b>. Masukkan jumlah hasil hitung.
+                </div>
+              </div>
+
+              <div className="sheet__grid">
+                <div className="field">
+                  <label className="field__label">Hasil hitung</label>
+                  <input
+                    className="input"
+                    style={{ borderRadius: 12 }}
+                    type="number"
+                    min={0}
+                    value={opnameQty}
+                    onChange={(e) => setOpnameQty(e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label className="field__label">Selisih</label>
+                  <div
+                    className="input"
+                    style={{ borderRadius: 12, display: 'flex', alignItems: 'center' }}
+                  >
+                    <b style={{ color: opnameDiff === 0 ? 'var(--muted)' : opnameDiff > 0 ? 'var(--good)' : 'var(--bad)' }}>
+                      {opnameDiff === 0 ? 'Sesuai' : `${opnameDiff > 0 ? '+' : ''}${opnameDiff}`}
+                    </b>
+                  </div>
+                </div>
+              </div>
+
+              <div className="field field--wide">
+                <label className="field__label">Catatan</label>
+                <input
+                  className="input"
+                  style={{ borderRadius: 12 }}
+                  value={opnameNote}
+                  onChange={(e) => setOpnameNote(e.target.value)}
+                  placeholder="cth. hasil hitung akhir bulan"
+                />
+              </div>
+            </div>
+            <div className="sheet__foot">
+              <button type="button" className="btn btn--ghost" onClick={() => setOpnameFor(null)}>Batal</button>
+              <button type="button" className="btn btn--primary" onClick={saveOpname} disabled={opnameSaving}>
+                <Save className="ico" /> {opnameSaving ? 'Menyimpan…' : 'Simpan Opname'}
               </button>
             </div>
           </div>

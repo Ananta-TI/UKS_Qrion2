@@ -6,6 +6,8 @@ import { logClientActivity } from '@/lib/activity-client';
 import { useSearchParams } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
 import { AppShell } from '@/components/layout/app-shell';
+import { visitStatusLabels } from '@/lib/visit-status';
+import type { DispenseResult, MedicineRow, StudentRow } from '@/lib/database.types';
 import {
   Search,
   UserRound,
@@ -15,14 +17,17 @@ import {
   Save,
   Stethoscope,
   ClipboardList,
+  X,
+  Plus,
+  Minus,
 } from 'lucide-react';
 
 type Status = 'back_to_class' | 'referred' | 'picked_up';
 
 const statusOptions: { key: Status; label: string }[] = [
-  { key: 'back_to_class', label: 'Kembali ke Kelas' },
-  { key: 'referred', label: 'Dirujuk ke Faskes/RS' },
-  { key: 'picked_up', label: 'Dijemput Orang Tua' },
+  { key: 'back_to_class', label: visitStatusLabels.back_to_class },
+  { key: 'referred', label: visitStatusLabels.referred },
+  { key: 'picked_up', label: visitStatusLabels.picked_up },
 ];
 
 export default function VisitFormPage() {
@@ -43,9 +48,9 @@ function VisitForm() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [student, setStudent] = useState<any | null>(null);
+  const [student, setStudent] = useState<StudentRow | null>(null);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<StudentRow[]>([]);
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +63,56 @@ function VisitForm() {
   const [treatment, setTreatment] = useState('');
   const [finalStatus, setFinalStatus] = useState<Status>('back_to_class');
   const [notes, setNotes] = useState('');
+
+  // Obat yang diberikan pada kunjungan ini, dipilih dari inventaris.
+  const [medicines, setMedicines] = useState<MedicineRow[]>([]);
+  const [medQuery, setMedQuery] = useState('');
+  const [selectedMeds, setSelectedMeds] = useState<
+    { id: string; name: string; unit: string | null; qty: number; stock: number }[]
+  >([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('medicines')
+        .select('*')
+        .order('name', { ascending: true });
+      setMedicines(data ?? []);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const medResults = medQuery.trim()
+    ? medicines
+        .filter((m) => {
+          const t = medQuery.trim().toLowerCase();
+          return m.name?.toLowerCase().includes(t) || (m.category ?? '').toLowerCase().includes(t);
+        })
+        .slice(0, 6)
+    : [];
+
+  function addMed(m: MedicineRow) {
+    if ((m.stock ?? 0) <= 0) {
+      toast.error(`Stok ${m.name} habis. Tambah stok dulu di halaman Inventaris.`, 'Stok Habis');
+      return;
+    }
+    setSelectedMeds((prev) => {
+      const existing = prev.find((p) => p.id === m.id);
+      if (existing) {
+        return prev.map((p) => (p.id === m.id ? { ...p, qty: p.qty + 1 } : p));
+      }
+      return [...prev, { id: m.id, name: m.name, unit: m.unit ?? null, qty: 1, stock: m.stock ?? 0 }];
+    });
+    setMedQuery('');
+  }
+
+  function changeQty(id: string, qty: number) {
+    setSelectedMeds((prev) => prev.map((p) => (p.id === id ? { ...p, qty } : p)));
+  }
+
+  function removeMed(id: string) {
+    setSelectedMeds((prev) => prev.filter((p) => p.id !== id));
+  }
 
   useEffect(() => {
     const id = searchParams.get('student');
@@ -91,7 +146,7 @@ function VisitForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  const selectStudent = (s: any) => {
+  const selectStudent = (s: StudentRow) => {
     setStudent(s);
     setQuery(s.full_name);
     setResults([]);
@@ -140,21 +195,71 @@ function VisitForm() {
       return;
     }
 
-    const meds = treatment.split(',').map((m) => m.trim()).filter(Boolean);
     const dispensed: string[] = [];
-    for (const m of meds) {
-      const { data: medsList } = await supabase.from('medicines').select('id,stock,name').ilike('name', `%${m}%`).limit(1);
-      const med = medsList?.[0];
-      if (med && (med.stock ?? 0) > 0) {
-        await supabase.from('medicines').update({ stock: (med.stock ?? 0) - 1 }).eq('id', med.id);
+    const skipped: string[] = [];
+
+    // Jalur utama: RPC atomik di database (mengunci baris obat).
+    let handled = false;
+    if (selectedMeds.length > 0) {
+      const items = selectedMeds.map((m) => ({ id: m.id, qty: m.qty, name: m.name }));
+      const { data: rpcData, error: rpcError } = await supabase.rpc('dispense_medicines', {
+        p_visit_id: visit.id,
+        p_items: items,
+        p_note: `Diberikan pada kunjungan siswa ${student.full_name}`,
+      });
+
+      if (!rpcError && rpcData) {
+        const result = rpcData as unknown as DispenseResult;
+        for (const d of result.dispensed ?? []) dispensed.push(`${d.name} ×${d.qty}`);
+        for (const s of result.skipped ?? []) {
+          if (s.reason === 'insufficient') skipped.push(`${s.name} (hanya ${s.given ?? 0} tersedia)`);
+          else if (s.reason === 'empty') skipped.push(`${s.name} (stok habis)`);
+          else if (s.reason === 'not_found') skipped.push(`${s.name} (tidak ditemukan)`);
+          else skipped.push(s.name);
+        }
+        handled = true;
+      }
+    }
+
+    // Fallback bila migrasi RPC belum dijalankan: compare-and-set lama.
+    if (!handled) {
+      for (const item of selectedMeds) {
+        // Baca stok terkini supaya pengurangan akurat walau ada perubahan bersamaan.
+        const { data: fresh } = await supabase
+          .from('medicines')
+          .select('id,stock,name')
+          .eq('id', item.id)
+          .maybeSingle();
+
+        const available = fresh?.stock ?? 0;
+        if (!fresh || available <= 0) {
+          skipped.push(`${item.name} (stok habis)`);
+          continue;
+        }
+
+        const take = Math.min(item.qty, available);
+        // Compare-and-set: hanya terapkan bila stok masih sama dengan yang dibaca.
+        const { data: updated } = await supabase
+          .from('medicines')
+          .update({ stock: available - take })
+          .eq('id', fresh.id)
+          .eq('stock', available)
+          .select('id')
+          .maybeSingle();
+
+        if (!updated) {
+          skipped.push(`${item.name} (stok berubah, coba lagi)`);
+          continue;
+        }
+
         await supabase.from('medicine_logs').insert({
-          medicine_id: med.id,
+          medicine_id: fresh.id,
           type: 'out',
-          qty: 1,
+          qty: take,
           reference_id: visit.id,
           notes: `Diberikan pada kunjungan siswa ${student.full_name}`,
         });
-        dispensed.push(med.name ?? m);
+        dispensed.push(`${fresh.name} ×${take}`);
       }
     }
 
@@ -187,7 +292,18 @@ function VisitForm() {
     setTreatment('');
     setFinalStatus('back_to_class');
     setNotes('');
-    alert('Kunjungan berhasil dicatat dan stok obat terupdate.');
+    setSelectedMeds([]);
+    setMedQuery('');
+
+    if (skipped.length > 0) {
+      toast.error(`Stok tidak cukup untuk: ${skipped.join(', ')}.`, 'Sebagian Obat Dilewati');
+    }
+    toast.success(
+      dispensed.length > 0
+        ? `Kunjungan dicatat. Stok dipotong: ${dispensed.join(', ')}.`
+        : 'Kunjungan berhasil dicatat.',
+      'Kunjungan Tersimpan'
+    );
   };
 
   return (
@@ -356,15 +472,112 @@ function VisitForm() {
             </div>
 
             <div className="field field--wide">
-              <label className="field__label">Tindakan / Obat</label>
+              <label className="field__label">Tindakan</label>
               <input
                 className="input"
                 style={{ borderRadius: 12 }}
                 value={treatment}
                 onChange={(e) => setTreatment(e.target.value)}
-                placeholder="Paracetamol, istirahat 30 menit…"
+                placeholder="Kompres, istirahat 30 menit, rujuk…"
               />
-              <span className="field__hint">Nama obat yang disebut otomatis memotong stok.</span>
+              <span className="field__hint">Catatan tindakan selain pemberian obat.</span>
+            </div>
+
+            <div className="field field--wide">
+              <label className="field__label">Obat Diberikan</label>
+              <div className="medpick">
+                <div className="medpick__search">
+                  <Search className="ico" />
+                  <input
+                    value={medQuery}
+                    onChange={(e) => setMedQuery(e.target.value)}
+                    placeholder="Cari obat dari inventaris…"
+                    aria-label="Cari obat"
+                  />
+                </div>
+
+                <div className="medpick__body">
+                  {medQuery.trim() &&
+                    (medResults.length === 0 ? (
+                      <div className="medpick__empty">Obat tidak ditemukan di inventaris.</div>
+                    ) : (
+                      <div className="medpick__list">
+                        {medResults.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => addMed(m)}
+                            className="medpick__opt"
+                          >
+                            <span className="av av--sm av--teal">
+                              <Pill className="ico" />
+                            </span>
+                            <div className="grow">
+                              <b>{m.name}</b>
+                              <small>
+                                {m.category || 'Tanpa kategori'} · stok {m.stock ?? 0} {m.unit ?? ''}
+                              </small>
+                            </div>
+                            <Plus className="ico muted" />
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+
+                  {selectedMeds.length > 0 && (
+                    <>
+                      <div className="medpick__selhead">Obat dipilih</div>
+                      <div className="medpick__sel">
+                        {selectedMeds.map((s) => (
+                          <div key={s.id} className="medpick__selrow">
+                            <span className="av av--sm av--amber">
+                              <Pill className="ico" />
+                            </span>
+                            <div className="grow">
+                              <b>{s.name}</b>
+                              <small>
+                                stok tersedia {s.stock} {s.unit ?? ''}
+                              </small>
+                            </div>
+                            <div className="medpick__qty">
+                              <button
+                                type="button"
+                                className="ibtn"
+                                onClick={() => changeQty(s.id, Math.max(1, s.qty - 1))}
+                                aria-label={`Kurangi ${s.name}`}
+                              >
+                                <Minus className="ico" />
+                              </button>
+                              <b>{s.qty}</b>
+                              <button
+                                type="button"
+                                className="ibtn"
+                                onClick={() => changeQty(s.id, Math.min(s.stock || s.qty, s.qty + 1))}
+                                aria-label={`Tambah ${s.name}`}
+                              >
+                                <Plus className="ico" />
+                              </button>
+                              <button
+                                type="button"
+                                className="ibtn"
+                                onClick={() => removeMed(s.id)}
+                                aria-label={`Hapus ${s.name}`}
+                                style={{ color: 'var(--bad)' }}
+                              >
+                                <X className="ico" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  <div className="medpick__hint">
+                    Stok obat berkurang otomatis sesuai jumlah yang dipilih.
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="field field--wide">
@@ -405,7 +618,7 @@ function VisitForm() {
 
       <div className="note" style={{ marginTop: 16 }}>
         <ClipboardList className="ico" />
-        <div>Catatan: stok obat dipotong otomatis setelah kunjungan berhasil disimpan.</div>
+        <div>Catatan: obat yang dipilih pada panel Obat Diberikan akan memotong stok otomatis setelah kunjungan disimpan.</div>
       </div>
     </AppShell>
   );

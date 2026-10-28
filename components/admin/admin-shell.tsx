@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Building2, PlusCircle, LogOut, ShieldCheck } from 'lucide-react';
+import { Building2, PlusCircle, LogOut } from 'lucide-react';
 
 export function AdminShell({ email, children }: { email: string; children: React.ReactNode }) {
   const pathname = usePathname();
@@ -12,9 +13,7 @@ export function AdminShell({ email, children }: { email: string; children: React
     <div className="adm">
       <aside className="adm__side">
         <Link href="/admin" prefetch={false} className="adm__brand">
-          <span className="adm__mark">
-            <ShieldCheck className="ico" strokeWidth={1.8} />
-          </span>
+          <Image src="/icon.png" alt="Qrion" width={40} height={40} className="adm__logo" priority />
           <span>
             <b>Qrion</b>
             <small>Super Admin</small>

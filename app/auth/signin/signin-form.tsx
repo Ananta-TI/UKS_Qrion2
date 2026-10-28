@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
 import { useRouter } from 'next/navigation';
-import { HeartPulse, LogIn, AlertCircle } from 'lucide-react';
+import { LogIn, AlertCircle } from 'lucide-react';
 
 export function SignInForm({ initialError }: { initialError: string | null }) {
   const supabase = createClient();
@@ -46,18 +47,19 @@ export function SignInForm({ initialError }: { initialError: string | null }) {
       <div className="signin">
         <div className="signin__card">
           <div className="flex items-center gap-3">
-            <span className="brand__mark" aria-hidden="true">
-              <HeartPulse />
-            </span>
-            <span className="brand__text">
-              <b>UKS</b>
-              <small>Sehat Sekolah</small>
-            </span>
+            <Image
+              src="/qrion-logo2.png"
+              alt="Qrion"
+              width={1081}
+              height={347}
+              priority
+              className="brand__img"
+            />
           </div>
 
           <div>
-            <h1>Masuk ke Aplikasi UKS</h1>
-            <p className="text-sm" style={{ marginTop: 6 }}>Untuk staf UKS sekolah dan admin Qrion.</p>
+            <h1>Masuk ke Qrion</h1>
+            <p className="text-sm" style={{ marginTop: 6 }}>Sistem informasi UKS untuk staf sekolah dan admin.</p>
           </div>
 
           <form onSubmit={handleLogin} className="grid gap-4">

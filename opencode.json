@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "ezkielyna-flash": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ezkielyna Flash",
+      "options": {
+        "baseURL": "https://api.ezkielyna.store/v1",
+        "apiKey": "sk-MhyiUipf4ZmjSgHjRjjHCkqA3BJVEdFpT1mJBcmw9zB0mMhd"
+      },
+      "models": {
+        "deepseek-v4.1-flash": { "name": "deepseek-v4.1-flash" }
+      }
+    }
+  }
+}

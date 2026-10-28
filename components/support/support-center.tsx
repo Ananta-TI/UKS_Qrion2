@@ -46,7 +46,7 @@ const faqs: Faq[] = [
     id: 'catat-kunjungan',
     category: 'kunjungan',
     q: 'Bagaimana cara mencatat kunjungan baru?',
-    a: 'Buka halaman Kunjungan lalu klik Catat, atau tekan tombol + pada dock. Pilih siswa, isi keluhan, suhu, tekanan darah, berat/tinggi, tindakan, dan status akhir, kemudian simpan. Nama obat yang ditulis di tindakan akan mengurangi stok secara otomatis.',
+    a: 'Buka halaman Kunjungan lalu klik Catat Kunjungan, atau dari kartu siswa di halaman Siswa klik Catat Kunjungan. Pilih siswa, isi keluhan, suhu, tekanan darah, berat/tinggi, tindakan, dan status akhir, kemudian simpan. Untuk obat, gunakan panel Obat Diberikan: cari obat dari inventaris, atur jumlahnya, dan stok akan berkurang otomatis.',
     keywords: 'tambah baru form pemeriksaan',
     popular: true,
     links: [
@@ -66,8 +66,8 @@ const faqs: Faq[] = [
   {
     id: 'restock',
     category: 'inventaris',
-    q: 'Bagaimana menambah atau merestock obat?',
-    a: 'Di halaman Inventaris, klik Tambah Obat untuk menambah item baru. Untuk menambah stok, gunakan tombol +1 pada baris obat. Stok di bawah batas minimum ditandai merah, dan obat yang kedaluwarsa dalam 30 hari ditandai kuning.',
+    q: 'Bagaimana mengelola data obat?',
+    a: 'Di halaman Inventaris: klik Tambah Obat untuk item baru, ikon pensil untuk mengubah data, dan ikon tempat sampah untuk menghapus. Gunakan tombol +1 Stok untuk menambah stok dengan cepat. Stok pada atau di bawah batas minimum ditandai merah, begitu juga obat yang sudah kedaluwarsa atau akan kedaluwarsa dalam 30 hari.',
     keywords: 'stok restok obat expired kadaluarsa minimum',
     popular: true,
     links: [{ label: 'Buka inventaris', href: '/inventory' }],
@@ -76,7 +76,7 @@ const faqs: Faq[] = [
     id: 'export',
     category: 'laporan',
     q: 'Bagaimana mengunduh laporan?',
-    a: 'Buka halaman Laporan, pilih rentang tanggal yang diinginkan, lalu klik Export PDF atau Export Excel. Berkas akan langsung diunduh sesuai filter yang sedang aktif.',
+    a: 'Buka halaman Laporan, pilih rentang tanggal yang diinginkan, lalu klik PDF atau Excel. Halaman Ringkasan juga menampilkan grafik pergerakan stok obat (masuk dan keluar). PDF memuat halaman khusus data obat, sedangkan Excel memuat lembar terpisah untuk kunjungan, inventaris obat, dan riwayat stok obat.',
     keywords: 'unduh pdf excel download rekap',
     popular: true,
     links: [{ label: 'Buka laporan', href: '/reports' }],
@@ -85,7 +85,7 @@ const faqs: Faq[] = [
     id: 'status-akhir',
     category: 'kunjungan',
     q: 'Apa arti status akhir kunjungan?',
-    a: 'Kembali ke Kelas berarti siswa sudah bisa melanjutkan pembelajaran. Dijemput Orang Tua berarti siswa dipulangkan. Dirujuk ke Faskes/RS berarti siswa perlu penanganan lanjutan di fasilitas kesehatan.',
+    a: 'Kembali ke kelas berarti siswa sudah bisa melanjutkan pembelajaran. Dijemput orang tua berarti siswa dipulangkan. Dirujuk ke faskes/RS berarti siswa perlu penanganan lanjutan di fasilitas kesehatan.',
     keywords: 'back to class referred picked up rujukan pulang',
   },
   {
@@ -104,6 +104,53 @@ const faqs: Faq[] = [
     links: [{ label: 'Kelola data siswa', href: '/students' }],
   },
   {
+    id: 'ekspor-csv',
+    category: 'siswa',
+    q: 'Bagaimana mengekspor data siswa?',
+    a: 'Di halaman Siswa klik Ekspor CSV untuk mengunduh seluruh data siswa sebagai berkas CSV. Berkas ini berisi kolom NIS, Nama, Kelas, Golongan Darah, Alergi, dan Riwayat Penyakit.',
+    keywords: 'csv ekspor unduh unduh data siswa excel',
+    links: [{ label: 'Buka data siswa', href: '/students' }],
+  },
+  {
+    id: 'detail-siswa',
+    category: 'siswa',
+    q: 'Di mana melihat riwayat lengkap seorang siswa?',
+    a: 'Klik nama siswa di halaman Siswa untuk membuka halaman detail. Di sana tampil profil (termasuk alergi dan riwayat penyakit), seluruh riwayat kunjungan, serta riwayat obat yang pernah diberikan beserta kunjungannya.',
+    keywords: 'detail profil riwayat obat alergi kunjungan',
+  },
+  {
+    id: 'cetak-surat',
+    category: 'kunjungan',
+    q: 'Bagaimana mencetak surat izin pulang?',
+    a: 'Di halaman Kunjungan, klik ikon printer pada baris kunjungan. Jendela pratinjau akan menampilkan surat izin pulang berisi identitas siswa, keluhan, tindakan, dan status akhir. Klik Cetak lalu pilih printer atau simpan sebagai PDF.',
+    keywords: 'print cetak surat izin pulang pdf pulang',
+    links: [{ label: 'Buka kunjungan', href: '/visits' }],
+  },
+  {
+    id: 'opname',
+    category: 'inventaris',
+    q: 'Bagaimana melakukan stok opname?',
+    a: 'Di halaman Inventaris klik ikon clipboard pada baris obat, masukkan jumlah hasil hitung fisik, lalu simpan. Sistem menampilkan selisih dan menyesuaikan stok beserta mencatatnya di riwayat stok obat.',
+    keywords: 'opname hitung fisik penyesuaian selisih stok',
+    links: [{ label: 'Buka inventaris', href: '/inventory' }],
+  },
+  {
+    id: 'notifikasi-stok',
+    category: 'inventaris',
+    q: 'Apa arti ikon lonceng di pojok aplikasi?',
+    a: 'Ikon lonceng menampilkan peringatan stok obat yang menipis atau sudah/mendekati kedaluwarsa (≤ 30 hari). Klik lonceng untuk melihat daftar, lalu klik salah satu untuk langsung membuka inventaris.',
+    keywords: 'notifikasi lonceng peringatan stok menipis kedaluwarsa',
+    links: [{ label: 'Buka inventaris', href: '/inventory' }],
+  },
+  {
+    id: 'log-aktivitas',
+    category: 'sekolah',
+    q: 'Bagaimana melihat riwayat aktivitas staf?',
+    a: 'Buka halaman Aktivitas untuk melihat log perubahan data, stok, ekspor, dan sesi login. Log hanya menampilkan aktivitas sekolah Anda, tidak dapat diubah, dan bisa disaring per jenis aksi serta dicari.',
+    keywords: 'log audit aktivitas riwayat siapa mengubah',
+    links: [{ label: 'Buka log aktivitas', href: '/activity' }],
+  },
+  {
     id: 'isolasi-data',
     category: 'sekolah',
     q: 'Apakah data sekolah lain bisa terlihat?',
@@ -119,7 +166,7 @@ const faqs: Faq[] = [
   },
 ];
 
-const popularQueries = ['catat kunjungan', 'cari siswa', 'stok obat', 'export laporan'];
+const popularQueries = ['catat kunjungan', 'cari siswa', 'stok obat', 'unduh laporan'];
 
 const categoryLabel = (id: CategoryId) => categories.find((c) => c.id === id)?.label ?? '';
 
