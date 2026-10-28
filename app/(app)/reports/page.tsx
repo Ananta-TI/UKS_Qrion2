@@ -101,6 +101,26 @@ function dayKey(iso: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function exportDate(iso: string) {
+  return new Date(iso).toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function exportTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function exportStatus(status: string | null) {
+  if (!status) return 'Belum diisi';
+  return statusMap[status]?.label ?? status;
+}
+
 /** Tren 7 hari selalu menampilkan tujuh titik, termasuk hari tanpa kunjungan. */
 function buildDailyTrend(visits: VisitRow[], days: number): GroupDatum[] {
   const buckets = new Map<string, GroupDatum>();
@@ -475,16 +495,17 @@ export default function ReportsPage() {
     doc.setFontSize(11);
     doc.text(`Periode: ${rangeInfo.label} | Dicetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 32);
     const rows = filtered.map((v) => [
-      new Date(v.check_in_at).toLocaleString('id-ID'),
+      exportDate(v.check_in_at),
+      exportTime(v.check_in_at),
       v.students?.full_name || '-',
       v.students?.nis || '-',
       v.students?.class || '-',
       v.chief_complaint || '-',
-      v.final_status || '-',
+      exportStatus(v.final_status),
     ]);
     (doc as any).autoTable({
       startY: 40,
-      head: [['Waktu', 'Siswa', 'NIS', 'Kelas', 'Keluhan', 'Status']],
+      head: [['Tanggal', 'Jam', 'Siswa', 'NIS', 'Kelas', 'Keluhan', 'Status']],
       body: rows,
     });
     doc.save(`laporan-uks-${range}-${new Date().toISOString().slice(0, 10)}.pdf`);
@@ -492,9 +513,10 @@ export default function ReportsPage() {
 
   function exportExcel() {
     const csv = [
-      ['Waktu', 'Siswa', 'NIS', 'Kelas', 'Keluhan', 'Suhu', 'TD', 'Berat', 'Tinggi', 'Tindakan', 'Status Akhir', 'Catatan'],
+      ['Tanggal', 'Jam', 'Siswa', 'NIS', 'Kelas', 'Keluhan', 'Suhu', 'TD', 'Berat', 'Tinggi', 'Tindakan', 'Status Akhir', 'Catatan'],
       ...filtered.map((v: any) => [
-        new Date(v.check_in_at).toLocaleString('id-ID'),
+        exportDate(v.check_in_at),
+        exportTime(v.check_in_at),
         v.students?.full_name || '-',
         v.students?.nis || '-',
         v.students?.class || '-',
@@ -504,7 +526,7 @@ export default function ReportsPage() {
         v.weight ?? '-',
         v.height ?? '-',
         v.treatment ?? '-',
-        v.final_status ?? '-',
+        exportStatus(v.final_status),
         v.notes ?? '-',
       ]),
     ]
