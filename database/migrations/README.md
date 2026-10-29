@@ -13,9 +13,12 @@ di Supabase → SQL Editor:
 | 3 | `003_dispense_medicines.sql` | RPC atomik `dispense_medicines()` untuk memotong stok saat kunjungan. |
 | 4 | `004_saved_reports.sql` | Tabel `saved_reports` agar laporan bisa dibagikan antar-staf. |
 | 5 | `005_default_medicines.sql` | Seeder obat bawaan untuk setiap sekolah baru + backfill sekolah lama. |
-| 6 | `006_stock_opname.sql` | RPC `apply_stock_opname()` untuk penyesuaian stok hasil opname. |
-| 7 | `007_tenant_isolation_test.sql` | Fungsi `tenant_isolation_report()` untuk memverifikasi isolasi antar-sekolah. |
-| 8 | `008_stock_restock.sql` | RPC atomik `restock_medicine()` untuk menambah stok (log + batch sekaligus). |
+| 6 | `007_tenant_isolation_test.sql` | Fungsi `tenant_isolation_report()` untuk memverifikasi isolasi antar-sekolah. |
+| 7 | `008_stock_restock.sql` | RPC atomik `restock_medicine()` untuk menambah stok (log + batch sekaligus). |
+
+> Catatan: `006_stock_opname.sql` telah dihapus karena fitur Stok Opname
+> dihentikan. Bila fungsinya masih ada di database, boleh di-drop:
+> `drop function if exists public.apply_stock_opname(uuid, integer, text);`
 
 ## Catatan kompatibilitas
 

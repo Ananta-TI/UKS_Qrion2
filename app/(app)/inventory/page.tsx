@@ -18,7 +18,6 @@ import type {
   MedicineRow,
   MedicineUnit,
   RestockResult,
-  StockOpnameResult,
 } from '@/lib/database.types';
 import {
   Package,
@@ -31,7 +30,6 @@ import {
   TrendingUp,
   Pencil,
   Trash2,
-  ClipboardCheck,
 } from 'lucide-react';
 
 type Filter = 'all' | 'low' | 'expiring';
@@ -63,12 +61,6 @@ function InventoryPageInner() {
     location: '',
     expiry_date: '',
   });
-
-  // Stok opname: sesuaikan stok ke hasil hitung fisik.
-  const [opnameFor, setOpnameFor] = useState<MedicineRow | null>(null);
-  const [opnameQty, setOpnameQty] = useState('');
-  const [opnameNote, setOpnameNote] = useState('');
-  const [opnameSaving, setOpnameSaving] = useState(false);
 
   async function load() {
     // fetchAllRows: hindari batas ±1000 baris PostgREST yang memotong senyap.
@@ -196,82 +188,6 @@ function InventoryPageInner() {
     load();
   }
 
-  function openOpname(m: MedicineRow) {
-    setOpnameFor(m);
-    setOpnameQty(String(m.stock ?? 0));
-    setOpnameNote('');
-  }
-
-  async function saveOpname() {
-    if (!opnameFor) return;
-
-    const counted = parseInt(opnameQty, 10);
-    if (Number.isNaN(counted) || counted < 0) {
-      toast.error('Jumlah hasil hitung tidak valid.', 'Opname Gagal');
-      return;
-    }
-
-    setOpnameSaving(true);
-    const before = opnameFor.stock ?? 0;
-    let diff = counted - before;
-
-    // Jalur utama: RPC yang juga menyesuaikan batch secara FIFO.
-    const { data, error } = await supabase.rpc('apply_stock_opname', {
-      p_medicine: opnameFor.id,
-      p_counted: counted,
-      p_note: opnameNote.trim() || null,
-    });
-
-    if (error) {
-      // Fallback bila RPC belum dimigrasi.
-      const { error: updateError } = await supabase
-        .from('medicines')
-        .update({ stock: counted })
-        .eq('id', opnameFor.id);
-
-      if (updateError) {
-        setOpnameSaving(false);
-        toast.error(`Gagal menyimpan opname: ${updateError.message}`, 'Opname Gagal');
-        return;
-      }
-
-      if (diff !== 0) {
-        await supabase.from('medicine_logs').insert({
-          medicine_id: opnameFor.id,
-          type: diff > 0 ? 'in' : 'out',
-          qty: Math.abs(diff),
-          notes: opnameNote.trim() || 'Penyesuaian stok opname',
-        });
-      }
-    } else {
-      const result = data as unknown as StockOpnameResult;
-      if (result && result.ok === false) {
-        setOpnameSaving(false);
-        toast.error('Opname ditolak server (data tidak ditemukan).', 'Opname Gagal');
-        return;
-      }
-      diff = result?.diff ?? diff;
-    }
-
-    await logClientActivity({
-      action: 'update',
-      entity: 'medicine',
-      entityId: opnameFor.id,
-      summary: `Stok opname ${opnameFor.name}: ${before} → ${counted}`,
-      metadata: { stock_before: before, stock_after: counted, diff },
-    });
-
-    setOpnameSaving(false);
-    setOpnameFor(null);
-    toast.success(
-      diff === 0
-        ? `Stok ${opnameFor.name} sudah sesuai hasil hitung.`
-        : `Stok ${opnameFor.name} disesuaikan (${diff > 0 ? '+' : ''}${diff}).`,
-      'Opname Selesai'
-    );
-    load();
-  }
-
   const emptyForm = {
     name: '',
     category: '',
@@ -332,44 +248,28 @@ function InventoryPageInner() {
         return;
       }
 
-      // Perubahan stok dirutekan lewat RPC opname agar batch + log ikut terjaga.
+      // Perubahan stok: update langsung + catat selisihnya ke riwayat.
       if (stock !== before) {
-        const { data, error: opError } = await supabase.rpc('apply_stock_opname', {
-          p_medicine: editing.id,
-          p_counted: stock,
-          p_note: 'Penyesuaian via edit obat',
-        });
+        const { error: updError } = await supabase
+          .from('medicines')
+          .update({ stock })
+          .eq('id', editing.id);
+        if (updError) {
+          setSaving(false);
+          toast.error(`Gagal menyesuaikan stok: ${updError.message}`, 'Obat Gagal Disimpan');
+          return;
+        }
 
-        if (opError) {
-          // Fallback bila RPC belum dimigrasi.
-          const { error: updError } = await supabase
-            .from('medicines')
-            .update({ stock })
-            .eq('id', editing.id);
-          if (updError) {
-            setSaving(false);
-            toast.error(`Gagal menyesuaikan stok: ${updError.message}`, 'Obat Gagal Disimpan');
-            return;
-          }
-          const diff = stock - before;
-          if (diff !== 0) {
-            const { error: logError } = await supabase.from('medicine_logs').insert({
-              medicine_id: editing.id,
-              type: diff > 0 ? 'in' : 'out',
-              qty: Math.abs(diff),
-              notes: 'Penyesuaian via edit obat',
-            });
-            if (logError && !isMissingTable(logError)) {
-              toast.error('Stok disesuaikan, tetapi riwayat stok gagal dicatat.', 'Peringatan');
-            }
-          }
-        } else {
-          const result = data as StockOpnameResult | null;
-          if (result && result.ok === false) {
-            setSaving(false);
-            toast.error('Stok ditolak server. Muat ulang lalu coba lagi.', 'Obat Gagal Disimpan');
-            load();
-            return;
+        const diff = stock - before;
+        if (diff !== 0) {
+          const { error: logError } = await supabase.from('medicine_logs').insert({
+            medicine_id: editing.id,
+            type: diff > 0 ? 'in' : 'out',
+            qty: Math.abs(diff),
+            notes: 'Penyesuaian via edit obat',
+          });
+          if (logError && !isMissingTable(logError)) {
+            toast.error('Stok disesuaikan, tetapi riwayat stok gagal dicatat.', 'Peringatan');
           }
         }
       }
@@ -446,13 +346,6 @@ function InventoryPageInner() {
     toast.success(`${m.name} berhasil dihapus.`, 'Obat Dihapus');
     load();
   }
-
-  const opnameCounted = parseInt(opnameQty, 10);
-  const opnameDiff = opnameFor
-    ? Number.isNaN(opnameCounted)
-      ? 0
-      : opnameCounted - (opnameFor.stock ?? 0)
-    : 0;
 
   return (
     <AppShell
@@ -560,15 +453,6 @@ function InventoryPageInner() {
                             <button
                               type="button"
                               className="ibtn"
-                              onClick={() => openOpname(m)}
-                              aria-label={`Stok opname ${m.name}`}
-                              title="Stok opname"
-                            >
-                              <ClipboardCheck className="ico" strokeWidth={1.7} />
-                            </button>
-                            <button
-                              type="button"
-                              className="ibtn"
                               onClick={() => openEdit(m)}
                               aria-label={`Edit ${m.name}`}
                               title="Edit obat"
@@ -659,78 +543,6 @@ function InventoryPageInner() {
         </ModalPortal>
       )}
 
-      {opnameFor && (
-        <ModalPortal>
-        <div className="overlay" onClick={() => setOpnameFor(null)}>
-          <div
-            className="sheet"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-label="Stok opname"
-          >
-            <div className="sheet__head">
-              <div>
-                <div className="sheet__title">Stok Opname</div>
-                <div className="sheet__sub">Sesuaikan stok {opnameFor.name} dengan hasil hitung fisik.</div>
-              </div>
-              <button type="button" className="ibtn" onClick={() => setOpnameFor(null)} aria-label="Tutup">
-                <X className="ico" />
-              </button>
-            </div>
-            <div className="sheet__body">
-              <div className="note">
-                <ClipboardCheck className="ico" />
-                <div>
-                  Stok tercatat: <b>{opnameFor.stock ?? 0} {opnameFor.unit ?? ''}</b>. Masukkan jumlah hasil hitung.
-                </div>
-              </div>
-
-              <div className="sheet__grid">
-                <div className="field">
-                  <label className="field__label">Hasil hitung</label>
-                  <input
-                    className="input"
-                    style={{ borderRadius: 12 }}
-                    type="number"
-                    min={0}
-                    value={opnameQty}
-                    onChange={(e) => setOpnameQty(e.target.value)}
-                  />
-                </div>
-                <div className="field">
-                  <label className="field__label">Selisih</label>
-                  <div
-                    className="input"
-                    style={{ borderRadius: 12, display: 'flex', alignItems: 'center' }}
-                  >
-                    <b style={{ color: opnameDiff === 0 ? 'var(--muted)' : opnameDiff > 0 ? 'var(--good)' : 'var(--bad)' }}>
-                      {opnameDiff === 0 ? 'Sesuai' : `${opnameDiff > 0 ? '+' : ''}${opnameDiff}`}
-                    </b>
-                  </div>
-                </div>
-              </div>
-
-              <div className="field field--wide">
-                <label className="field__label">Catatan</label>
-                <input
-                  className="input"
-                  style={{ borderRadius: 12 }}
-                  value={opnameNote}
-                  onChange={(e) => setOpnameNote(e.target.value)}
-                  placeholder="cth. hasil hitung akhir bulan"
-                />
-              </div>
-            </div>
-            <div className="sheet__foot">
-              <button type="button" className="btn btn--ghost" onClick={() => setOpnameFor(null)}>Batal</button>
-              <button type="button" className="btn btn--primary" onClick={saveOpname} disabled={opnameSaving}>
-                <Save className="ico" /> {opnameSaving ? 'Menyimpan…' : 'Simpan Opname'}
-              </button>
-            </div>
-          </div>
-        </div>
-        </ModalPortal>
-      )}
     </AppShell>
   );
 }

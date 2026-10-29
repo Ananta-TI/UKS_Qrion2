@@ -200,10 +200,6 @@ export type Database = {
         Args: { p_visit_id: string; p_items: Json; p_note?: string | null };
         Returns: Json;
       };
-      apply_stock_opname: {
-        Args: { p_medicine: string; p_counted: number; p_note?: string | null };
-        Returns: Json;
-      };
       restock_medicine: {
         Args: { p_medicine: string; p_qty: number; p_note?: string | null };
         Returns: Json;
@@ -227,14 +223,6 @@ export type DispenseSkipped = {
 export type DispenseResult = {
   dispensed: DispenseItem[];
   skipped: DispenseSkipped[];
-};
-
-export type StockOpnameResult = {
-  ok: boolean;
-  before?: number;
-  after?: number;
-  diff?: number;
-  error?: string;
 };
 
 /** Bentuk hasil RPC `restock_medicine`. */

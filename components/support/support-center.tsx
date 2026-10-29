@@ -127,14 +127,6 @@ const faqs: Faq[] = [
     links: [{ label: 'Buka kunjungan', href: '/visits' }],
   },
   {
-    id: 'opname',
-    category: 'inventaris',
-    q: 'Bagaimana melakukan stok opname?',
-    a: 'Di halaman Inventaris klik ikon clipboard pada baris obat, masukkan jumlah hasil hitung fisik, lalu simpan. Sistem menampilkan selisih dan menyesuaikan stok beserta mencatatnya di riwayat stok obat.',
-    keywords: 'opname hitung fisik penyesuaian selisih stok',
-    links: [{ label: 'Buka inventaris', href: '/inventory' }],
-  },
-  {
     id: 'notifikasi-stok',
     category: 'inventaris',
     q: 'Apa arti ikon lonceng di pojok aplikasi?',

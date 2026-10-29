@@ -310,7 +310,7 @@ export default function StudentsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4">
         {students.map((s, i) => (
           <div key={s.id} className="card">
             <div className="flex items-start justify-between gap-2">
