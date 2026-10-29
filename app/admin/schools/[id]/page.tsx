@@ -125,7 +125,8 @@ export default async function SchoolDetailPage({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="field">
                 <span className="field__label">Slug</span>
-                <input name="slug" defaultValue={school.slug ?? ''} />
+                <input name="slug" defaultValue={school.slug ?? ''} minLength={3} maxLength={60} />
+                <span className="field__hint">Huruf kecil, angka, tanda hubung. Harus unik.</span>
               </label>
 
               <label className="field">

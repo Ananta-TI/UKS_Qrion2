@@ -48,8 +48,8 @@ export default async function NewSchoolPage({
 
           <label className="field">
             <span className="field__label">Slug</span>
-            <input name="slug" placeholder="otomatis dari nama" />
-            <span className="field__hint">Huruf kecil, angka, dan tanda hubung.</span>
+            <input name="slug" minLength={3} maxLength={60} placeholder="otomatis dari nama" />
+            <span className="field__hint">Huruf kecil, angka, dan tanda hubung. Harus unik.</span>
           </label>
 
           <label className="field">

@@ -60,7 +60,12 @@ export async function createSchool(formData: FormData) {
     fail('/admin/schools/new', (e as Error).message);
   }
 
-  const slug = slugInput || slugify(name) || `sekolah-${Date.now()}`;
+  const slug = slugInput ? slugify(slugInput) : slugify(name) || `sekolah-${Date.now()}`;
+  if (slug.length < 3) fail('/admin/schools/new', 'Slug minimal 3 karakter.');
+  if (slug.length > 60) fail('/admin/schools/new', 'Slug maksimal 60 karakter.');
+
+  const { data: existing } = await supabase.from('schools').select('id').eq('slug', slug).maybeSingle();
+  if (existing) fail('/admin/schools/new', `Slug "${slug}" sudah dipakai sekolah lain.`);
 
   const { data: school, error: schoolError } = await supabase
     .from('schools')
@@ -69,6 +74,9 @@ export async function createSchool(formData: FormData) {
     .single();
 
   if (schoolError || !school) {
+    if (schoolError?.code === '23505') {
+      fail('/admin/schools/new', `Slug "${slug}" sudah dipakai sekolah lain.`);
+    }
     fail('/admin/schools/new', schoolError?.message ?? 'Gagal membuat sekolah.');
   }
 
@@ -181,7 +189,7 @@ export async function createSchoolAccount(formData: FormData) {
 export async function updateSchool(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   const name = String(formData.get('name') ?? '').trim();
-  const slug = String(formData.get('slug') ?? '').trim() || null;
+  const slugInput = String(formData.get('slug') ?? '').trim();
   const address = String(formData.get('address') ?? '').trim() || null;
   const phone = String(formData.get('phone') ?? '').trim() || null;
   const isActive = formData.get('is_active') === 'on';
@@ -189,14 +197,37 @@ export async function updateSchool(formData: FormData) {
   if (!id) fail('/admin', 'ID sekolah tidak valid.');
   if (name.length < 2) fail(`/admin/schools/${id}`, 'Nama sekolah minimal 2 karakter.');
 
+  const slug = slugInput ? slugify(slugInput) : null;
+  if (slug && slug.length < 3) {
+    fail(`/admin/schools/${id}`, 'Slug minimal 3 karakter (huruf kecil, angka, tanda hubung).');
+  }
+  if (slug && slug.length > 60) fail(`/admin/schools/${id}`, 'Slug maksimal 60 karakter.');
+
   const { supabase, user, profile } = await requireSuperAdmin();
+
+  if (slug) {
+    const { data: slugOwner, error: slugError } = await supabase
+      .from('schools')
+      .select('id')
+      .eq('slug', slug)
+      .neq('id', id)
+      .maybeSingle();
+
+    if (slugError) fail(`/admin/schools/${id}`, `Gagal memeriksa slug: ${slugError.message}`);
+    if (slugOwner) fail(`/admin/schools/${id}`, `Slug "${slug}" sudah dipakai sekolah lain.`);
+  }
 
   const { error } = await supabase
     .from('schools')
     .update({ name, slug, address, phone, is_active: isActive, updated_at: new Date().toISOString() })
     .eq('id', id);
 
-  if (error) fail(`/admin/schools/${id}`, error.message);
+  if (error) {
+    if (error.code === '23505') {
+      fail(`/admin/schools/${id}`, `Slug "${slug}" sudah dipakai sekolah lain.`);
+    }
+    fail(`/admin/schools/${id}`, error.message);
+  }
 
   await logActivity({
     schoolId: id,

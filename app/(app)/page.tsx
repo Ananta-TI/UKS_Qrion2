@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import {
   Activity,
   AlertTriangle,
+  Ambulance,
   ArrowDownRight,
   ArrowUpRight,
   CalendarDays,
@@ -185,6 +186,7 @@ export default async function DashboardPage() {
 
   const yearTotal = monthly.reduce((sum, month) => sum + month.total, 0);
   const returnedYear = monthly.reduce((sum, month) => sum + month.returned, 0);
+  const referredYear = monthly.reduce((sum, month) => sum + month.referred, 0);
   const monthTotal = monthly[now.getMonth()].total;
   const previousMonthTotal = now.getMonth() > 0 ? monthly[now.getMonth() - 1].total : null;
   const monthGrowth =
@@ -192,14 +194,8 @@ export default async function DashboardPage() {
       ? Math.round(((monthTotal - previousMonthTotal) / previousMonthTotal) * 100)
       : null;
 
-  const activeDaysYear = new Set(
-    visits.filter((visit) => new Date(visit.check_in_at).getFullYear() === now.getFullYear()).map((visit) => {
-      const date = new Date(visit.check_in_at);
-      return dayKey(date);
-    })
-  ).size;
-  const avgPerDay = activeDaysYear ? yearTotal / activeDaysYear : 0;
   const returnRate = yearTotal ? Math.round((returnedYear / yearTotal) * 100) : 0;
+  const referralRate = yearTotal ? Math.round((referredYear / yearTotal) * 100) : 0;
 
   const monthDaily = Array.from({ length: now.getDate() }, () => 0);
   visits.forEach((visit) => {
@@ -509,18 +505,18 @@ export default async function DashboardPage() {
           <div className="dash-kpi">
             <div className="dash-kpi__label">
               <span className="dash-kpi__ico">
-                <TrendingUp className="ico" />
+                <Ambulance className="ico" />
               </span>
-              Rata-rata per hari aktif
+              Dirujuk tahun ini
             </div>
             <div className="dash-kpi__row">
               <div className="dash-kpi__value">
-                <CountUp value={avgPerDay} decimals={1} />
+                <CountUp value={referredYear} />
               </div>
-              <Sparkline values={monthly.map((month) => month.total)} />
+              <Sparkline values={monthly.map((month) => month.referred)} tone="bad" />
             </div>
             <div className="dash-kpi__foot">
-              {yearTotal} kunjungan ÷ {activeDaysYear} hari ada kunjungan
+              {referralRate}% dari {yearTotal} kunjungan · butuh penanganan lanjut
             </div>
           </div>
 

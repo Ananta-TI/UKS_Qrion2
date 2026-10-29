@@ -10,6 +10,7 @@ import { CountUp } from '@/components/ui/count-up';
 import { useToast } from '@/components/ui/toast';
 import { fetchAllRows } from '@/lib/supabase/paginate';
 import { downloadCsv } from '@/lib/csv';
+import { useViewMode, ViewToggle } from '@/components/ui/view-toggle';
 import {
   Search,
   AlertCircle,
@@ -64,6 +65,7 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const { view, setView } = useViewMode('students');
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<StudentRow | null>(null);
@@ -284,6 +286,7 @@ export default function StudentsPage() {
           />
         </div>
         <span className="toolbar__spacer" />
+        <ViewToggle value={view} onChange={setView} label="Mode tampilan data siswa" />
         <button type="button" className="btn btn--ghost btn--sm" onClick={exportCsv} disabled={exporting}>
           <Download className="ico" /> {exporting ? 'Menyiapkan…' : 'Ekspor CSV'}
         </button>
@@ -310,29 +313,128 @@ export default function StudentsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4">
-        {students.map((s, i) => (
-          <div key={s.id} className="card">
-            <div className="flex items-start justify-between gap-2">
-              <Link
-                href={`/students/${s.id}`}
-                prefetch={false}
-                className="flex items-center gap-3 min-w-0"
-                title={`Lihat detail ${s.full_name}`}
-              >
-                <span className={`av av--lg ${tones[i % tones.length]}`}>
+      {view === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4">
+          {students.map((s, i) => (
+            <div key={s.id} className="card">
+              <div className="flex items-start justify-between gap-2">
+                <Link
+                  href={`/students/${s.id}`}
+                  prefetch={false}
+                  className="flex items-center gap-3 min-w-0"
+                  title={`Lihat detail ${s.full_name}`}
+                >
+                  <span className={`av av--lg ${tones[i % tones.length]}`}>
+                    {s.full_name.charAt(0).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate inline-flex items-center gap-1" style={{ fontSize: 'var(--fs-lg)' }}>
+                      {s.full_name}
+                      <Chevron className="ico muted" style={{ width: 15, height: 15 }} />
+                    </div>
+                    <div className="muted text-xs">NIS {s.nis} · Kelas {s.class ?? '-'}</div>
+                  </div>
+                </Link>
+
+                <div className="flex items-center gap-1 flex-none">
+                  <button
+                    type="button"
+                    className="ibtn"
+                    onClick={() => openEdit(s)}
+                    aria-label={`Edit ${s.full_name}`}
+                    title="Edit siswa"
+                  >
+                    <Pencil className="ico" strokeWidth={1.7} />
+                  </button>
+                  <button
+                    type="button"
+                    className="ibtn"
+                    onClick={() => remove(s)}
+                    disabled={deletingId === s.id}
+                    aria-label={`Hapus ${s.full_name}`}
+                    title="Hapus siswa"
+                    style={{ color: 'var(--bad)' }}
+                  >
+                    <Trash2 className="ico" strokeWidth={1.7} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-2 mt-4">
+                {s.blood_type && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <TestTube className="ico muted" />
+                    <span className="muted">Gol. darah</span>
+                    <span className="tag tag--sky">{s.blood_type}</span>
+                  </div>
+                )}
+                {s.allergies && (
+                  <div className="flex items-start gap-2 text-sm">
+                    <AlertCircle className="ico" style={{ color: 'var(--bad)', marginTop: 1 }} />
+                    <span style={{ color: 'var(--bad)' }}>Alergi: {s.allergies}</span>
+                  </div>
+                )}
+                {s.chronic_diseases && (
+                  <div className="flex items-start gap-2 text-sm">
+                    <Pill className="ico" style={{ color: 'var(--warn)', marginTop: 1 }} />
+                    <span style={{ color: 'var(--warn)' }}>Riwayat: {s.chronic_diseases}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 mt-4">
+                <Link href={`/visits/new?student=${s.id}`} prefetch={false} className="btn btn--ghost btn--sm grow">
+                  <Stethoscope className="ico" /> Catat Kunjungan
+                </Link>
+                <Link href={`/students/${s.id}`} prefetch={false} className="btn btn--soft btn--sm">
+                  Detail
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="slist">
+          {students.map((s, i) => (
+            <div key={s.id} className="slist__row">
+              <div className="slist__main">
+                <span className={`av av--sm ${tones[i % tones.length]}`}>
                   {s.full_name.charAt(0).toUpperCase()}
                 </span>
                 <div className="min-w-0">
-                  <div className="font-semibold truncate inline-flex items-center gap-1" style={{ fontSize: 'var(--fs-lg)' }}>
+                  <Link href={`/students/${s.id}`} prefetch={false} className="slist__name" title={`Lihat detail ${s.full_name}`}>
                     {s.full_name}
-                    <Chevron className="ico muted" style={{ width: 15, height: 15 }} />
+                    <Chevron className="ico muted" style={{ width: 14, height: 14, flex: 'none' }} />
+                  </Link>
+                  <div className="slist__meta">
+                    <span>NIS {s.nis}</span>
+                    <span>Kelas {s.class ?? '-'}</span>
+                    {s.blood_type && <span className="tag tag--sky">{s.blood_type}</span>}
+                    {s.allergies && (
+                      <span className="slist__flag slist__flag--bad">
+                        <AlertCircle className="ico" />
+                        <span>Alergi: {s.allergies}</span>
+                      </span>
+                    )}
+                    {s.chronic_diseases && (
+                      <span className="slist__flag slist__flag--warn">
+                        <Pill className="ico" />
+                        <span>Riwayat: {s.chronic_diseases}</span>
+                      </span>
+                    )}
                   </div>
-                  <div className="muted text-xs">NIS {s.nis} · Kelas {s.class ?? '-'}</div>
                 </div>
-              </Link>
+              </div>
 
-              <div className="flex items-center gap-1 flex-none">
+              <div className="slist__end">
+                <Link
+                  href={`/visits/new?student=${s.id}`}
+                  prefetch={false}
+                  className="btn btn--ghost btn--sm"
+                  title="Catat kunjungan"
+                >
+                  <Stethoscope className="ico" /> Kunjungan
+                </Link>
                 <button
                   type="button"
                   className="ibtn"
@@ -355,40 +457,9 @@ export default function StudentsPage() {
                 </button>
               </div>
             </div>
-
-            <div className="grid gap-2 mt-4">
-              {s.blood_type && (
-                <div className="flex items-center gap-2 text-sm">
-                  <TestTube className="ico muted" />
-                  <span className="muted">Gol. darah</span>
-                  <span className="tag tag--sky">{s.blood_type}</span>
-                </div>
-              )}
-              {s.allergies && (
-                <div className="flex items-start gap-2 text-sm">
-                  <AlertCircle className="ico" style={{ color: 'var(--bad)', marginTop: 1 }} />
-                  <span style={{ color: 'var(--bad)' }}>Alergi: {s.allergies}</span>
-                </div>
-              )}
-              {s.chronic_diseases && (
-                <div className="flex items-start gap-2 text-sm">
-                  <Pill className="ico" style={{ color: 'var(--warn)', marginTop: 1 }} />
-                  <span style={{ color: 'var(--warn)' }}>Riwayat: {s.chronic_diseases}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 mt-4">
-              <Link href={`/visits/new?student=${s.id}`} prefetch={false} className="btn btn--ghost btn--sm grow">
-                <Stethoscope className="ico" /> Catat Kunjungan
-              </Link>
-              <Link href={`/students/${s.id}`} prefetch={false} className="btn btn--soft btn--sm">
-                Detail
-              </Link>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {!loading && total > PAGE_SIZE && (
         <div className="toolbar" style={{ marginTop: 16, justifyContent: 'center' }}>

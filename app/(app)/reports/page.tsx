@@ -8,6 +8,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import {
   AlertCircle,
+  Ambulance,
   ArrowUpRight,
   BarChart3,
   CalendarDays,
@@ -509,9 +510,8 @@ export default function ReportsPage() {
   const uniqueStudents = new Set(filtered.map((v) => v.student_id)).size;
   const returned = statusCounts['back_to_class'] ?? 0;
   const returnRate = total ? Math.round((returned / total) * 100) : 0;
-
-  const activeDays = new Set(filtered.map((v) => dayKey(v.check_in_at))).size;
-  const avgPerDay = activeDays ? total / activeDays : 0;
+  const referred = statusCounts['referred'] ?? 0;
+  const referralRate = total ? Math.round((referred / total) * 100) : 0;
 
   const monthly = buildGroups(filtered, 'month', 'visits');
   const trend = range === '7d' ? buildDailyTrend(filtered, 7) : monthly;
@@ -994,11 +994,11 @@ export default function ReportsPage() {
 
             <div className="rpt__kpi">
               <div className="rpt__kpi-label">
-                <CalendarDays className="ico" /> Rata-rata / hari aktif
+                <Ambulance className="ico" /> Dirujuk
               </div>
-              <div className="rpt__kpi-value"><CountUp value={avgPerDay} decimals={1} /></div>
+              <div className="rpt__kpi-value"><CountUp value={referred} /></div>
               <div className="rpt__kpi-foot">
-                <CountUp value={total} /> kunjungan ÷ <CountUp value={activeDays} /> hari ada kunjungan
+                <CountUp value={referralRate} suffix="%" /> dari <CountUp value={total} /> kunjungan · butuh penanganan lanjut
               </div>
             </div>
 

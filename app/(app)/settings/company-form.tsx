@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { AlertCircle, CheckCircle2, FileText, HeartPulse, Lock, Save, Undo2 } from 'lucide-react';
+import { FileText, HeartPulse, Lock, Save, Undo2 } from 'lucide-react';
 import { updateCompanyProfile } from '@/app/(app)/settings/actions';
 
 type SchoolForm = {
@@ -28,16 +28,13 @@ export function CompanyForm({
   school,
   email,
   canEdit,
-  ok,
-  error,
 }: {
   school: SchoolForm;
   email: string;
   canEdit: boolean;
-  ok?: string;
-  error?: string;
 }) {
   const [name, setName] = useState(school.name);
+  const [slug, setSlug] = useState(school.slug ?? '');
   const [emailValue, setEmailValue] = useState(email);
   const [address, setAddress] = useState(school.address ?? '');
   const [phone, setPhone] = useState(school.phone ?? '');
@@ -49,6 +46,7 @@ export function CompanyForm({
         className="card set-form"
         onReset={() => {
           setName(school.name);
+          setSlug(school.slug ?? '');
           setEmailValue(email);
           setAddress(school.address ?? '');
           setPhone(school.phone ?? '');
@@ -63,19 +61,6 @@ export function CompanyForm({
             </span>
           </div>
         </div>
-
-        {ok && (
-          <div className="note note--ok">
-            <CheckCircle2 className="ico" />
-            <span>{ok}</span>
-          </div>
-        )}
-        {error && (
-          <div className="note note--bad">
-            <AlertCircle className="ico" />
-            <span>{error}</span>
-          </div>
-        )}
 
         <div className="set-fields">
           <div className="field field--wide">
@@ -99,8 +84,27 @@ export function CompanyForm({
             <label className="field__label" htmlFor="company-slug">
               Slug sekolah
             </label>
-            <input id="company-slug" value={school.slug ?? '—'} readOnly disabled />
-            <span className="field__hint">Dibuat otomatis oleh admin Qrion.</span>
+            <input
+              id="company-slug"
+              name="slug"
+              value={slug}
+              onChange={(e) =>
+                setSlug(
+                  e.target.value
+                    .toLowerCase()
+                    .replace(/[^a-z0-9-]+/g, '-')
+                    .replace(/-{2,}/g, '-')
+                )
+              }
+              minLength={3}
+              maxLength={60}
+              disabled={!canEdit}
+              placeholder="sman-1-bandung"
+            />
+            <span className="field__hint">
+              Penanda unik sekolah: huruf kecil, angka, dan tanda hubung. Kosongkan untuk dibuat otomatis dari
+              nama sekolah.
+            </span>
           </div>
 
           <div className="field">
@@ -224,7 +228,7 @@ export function CompanyForm({
 
           <div className="set-doc__foot">
             <span>PROFIL UKS</span>
-            <span>{school.slug ?? 'sekolah'}</span>
+            <span>{slug || 'sekolah'}</span>
           </div>
         </div>
       </aside>

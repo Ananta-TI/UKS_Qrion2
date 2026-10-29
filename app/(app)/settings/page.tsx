@@ -1,8 +1,15 @@
 import { redirect } from 'next/navigation';
-import { ShieldCheck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { getSessionProfile, profileSchool } from '@/lib/auth';
 import { SettingsShell } from '@/components/settings/settings-shell';
 import { CompanyForm } from './company-form';
+import { PersonalForm } from './personal-form';
+
+const roleLabel: Record<string, string> = {
+  super_admin: 'Super admin',
+  school_admin: 'Admin sekolah',
+  staff: 'Staf UKS',
+};
 
 export default async function SettingsPage({
   searchParams,
@@ -25,17 +32,38 @@ export default async function SettingsPage({
       actions={
         <span className={canEdit ? 'spill spill--iris' : 'spill'}>
           <i />
-          {canEdit ? 'Admin sekolah' : 'Hanya lihat'}
+          {roleLabel[profile.role] ?? 'Hanya lihat'}
         </span>
       }
     >
-      <CompanyForm
-        school={school}
-        email={profile.email ?? user?.email ?? ''}
-        canEdit={canEdit}
-        ok={params.ok}
-        error={params.error}
-      />
+      <div className="set-stack">
+        {params.ok && (
+          <div className="note note--ok">
+            <CheckCircle2 className="ico" />
+            <span>{params.ok}</span>
+          </div>
+        )}
+        {params.error && (
+          <div className="note note--bad">
+            <AlertCircle className="ico" />
+            <span>{params.error}</span>
+          </div>
+        )}
+
+        <CompanyForm
+          key={school.slug ?? 'no-slug'}
+          school={school}
+          email={profile.email ?? user?.email ?? ''}
+          canEdit={canEdit}
+        />
+
+        <PersonalForm
+          key={profile.full_name ?? 'no-name'}
+          fullName={profile.full_name ?? ''}
+          email={profile.email ?? user?.email ?? ''}
+          role={roleLabel[profile.role] ?? profile.role}
+        />
+      </div>
       <p className="set-hint">
         <ShieldCheck className="ico" />
         Perubahan hanya berlaku untuk sekolah Anda. Data antar sekolah tidak pernah tercampur.
