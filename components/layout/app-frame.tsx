@@ -7,7 +7,8 @@ import { usePathname } from 'next/navigation';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { CommandPalette } from '@/components/layout/command-palette';
 import { SettingsRail } from '@/components/layout/settings-rail';
-import { NotificationsBell } from '@/components/layout/notifications-bell';
+import { StickyHeadObserver } from '@/components/layout/sticky-head-observer';
+import { HeaderContext, PageHeader, type HeaderSpec } from '@/components/layout/page-header';
 import {
   LayoutDashboard,
   Users,
@@ -74,6 +75,7 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [headerSpec, setHeaderSpec] = useState<HeaderSpec | null>(null);
   const addRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -166,7 +168,6 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
             className="brand__img"
           />
         </Link>
-        <NotificationsBell />
         <button
           type="button"
           className="mobilebar__icon"
@@ -209,7 +210,6 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
               />
             </Link>
             <div className="flex items-center gap-2">
-              <NotificationsBell />
               <button
                 type="button"
                 className="sidebar__close"
@@ -377,12 +377,16 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
         </div>
       </aside>
 
-      <div className={pathname.startsWith('/settings') ? 'app app--settings' : 'app'}>
-        <main className="main">
-          {pathname.startsWith('/settings') && <SettingsRail />}
-          {children}
-        </main>
-      </div>
+      <HeaderContext.Provider value={setHeaderSpec}>
+        <div className={pathname.startsWith('/settings') ? 'app app--settings' : 'app'}>
+          <StickyHeadObserver />
+          <main className="main">
+            <PageHeader spec={headerSpec} />
+            {pathname.startsWith('/settings') && <SettingsRail />}
+            {children}
+          </main>
+        </div>
+      </HeaderContext.Provider>
 
       <AnimatePresence>
         {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}

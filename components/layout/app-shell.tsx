@@ -1,8 +1,14 @@
-import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+'use client';
 
-export type Crumb = { label: string; href?: string };
+import type { ReactNode } from 'react';
+import { type Crumb, useSetHeader } from '@/components/layout/page-header';
 
+export type { Crumb };
+
+/**
+ * Menyediakan isi header (breadcrumb, judul, aksi) untuk header persisten yang
+ * dirender layout. Halaman cukup merender kontennya sendiri di dalam `.view`.
+ */
 export function AppShell({
   title,
   crumbs,
@@ -11,36 +17,11 @@ export function AppShell({
 }: {
   title: string;
   crumbs?: Crumb[];
-  actions?: React.ReactNode;
-  children: React.ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
 }) {
   const trail: Crumb[] = crumbs ?? [{ label: 'UKS', href: '/' }, { label: title }];
+  useSetHeader({ title, crumbs: trail, actions });
 
-  return (
-    <>
-      <div className="phead page-enter">
-        <div className="phead__lead">
-          <nav className="crumbs" aria-label="Breadcrumb">
-            {trail.map((c, i) => {
-              const last = i === trail.length - 1;
-              return (
-                <span key={i} className="inline-flex items-center gap-1.5">
-                  {c.href && !last ? (
-                    <Link href={c.href} prefetch={false}>{c.label}</Link>
-                  ) : (
-                    <span aria-current={last ? 'page' : undefined}>{c.label}</span>
-                  )}
-                  {!last && <ChevronRight className="ico" style={{ width: 14, height: 14, opacity: 0.6 }} />}
-                </span>
-              );
-            })}
-          </nav>
-          <h1 className="top__title">{title}</h1>
-        </div>
-        {actions ? <div className="phead__actions">{actions}</div> : null}
-      </div>
-
-      <div className="view page-enter">{children}</div>
-    </>
-  );
+  return <div className="view page-enter">{children}</div>;
 }

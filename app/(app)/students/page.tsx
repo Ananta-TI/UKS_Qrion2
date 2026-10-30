@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/toast';
 import { fetchAllRows } from '@/lib/supabase/paginate';
 import { downloadCsv } from '@/lib/csv';
 import { useViewMode, ViewToggle } from '@/components/ui/view-toggle';
+import { useMediaQuery } from '@/lib/use-media-query';
 import {
   Search,
   AlertCircle,
@@ -66,6 +67,9 @@ export default function StudentsPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const { view, setView } = useViewMode('students');
+  // Di layar kecil selalu pakai mode kartu; toggle-nya disembunyikan.
+  const isDesktop = useMediaQuery('(min-width: 761px)');
+  const effectiveView = isDesktop ? view : 'grid';
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<StudentRow | null>(null);
@@ -286,7 +290,7 @@ export default function StudentsPage() {
           />
         </div>
         <span className="toolbar__spacer" />
-        <ViewToggle value={view} onChange={setView} label="Mode tampilan data siswa" />
+        {isDesktop && <ViewToggle value={view} onChange={setView} label="Mode tampilan data siswa" />}
         <button type="button" className="btn btn--ghost btn--sm" onClick={exportCsv} disabled={exporting}>
           <Download className="ico" /> {exporting ? 'Menyiapkan…' : 'Ekspor CSV'}
         </button>
@@ -313,7 +317,7 @@ export default function StudentsPage() {
         </div>
       )}
 
-      {view === 'grid' ? (
+      {effectiveView === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4">
           {students.map((s, i) => (
             <div key={s.id} className="card">

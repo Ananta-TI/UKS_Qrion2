@@ -1,20 +1,11 @@
 /**
- * Loading boundary untuk seluruh area (app). Bentuknya mengikuti header,
- * KPI, dan kartu agar transisi tidak menggeser layout saat halaman selesai dimuat.
+ * Loading boundary untuk seluruh area (app). Header dirender oleh layout
+ * (AppFrame) sehingga tidak perlu diulang di sini — cukup kerangka isi
+ * halaman agar transisi tidak menggeser layout saat halaman selesai dimuat.
  */
 export default function Loading() {
   return (
     <>
-      <div className="phead">
-        <div className="phead__lead">
-          <div className="skel skel--crumbs" />
-          <div className="skel skel--title" />
-        </div>
-        <div className="phead__actions">
-          <div className="skel skel--pill" />
-        </div>
-      </div>
-
       <div className="view page-skeleton" aria-busy="true">
         <span className="sr-only">Memuat halaman…</span>
         <div className="kpis">

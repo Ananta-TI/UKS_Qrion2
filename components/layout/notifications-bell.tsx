@@ -159,7 +159,12 @@ export function NotificationsBell({ className }: { className?: string }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
-    const onScroll = () => setOpen(false);
+    const onScroll = (e: Event) => {
+      // Scroll di dalam panel (daftar notifikasi) tidak boleh menutup panel;
+      // hanya scroll halaman di belakangnya yang menutup.
+      if (panelRef.current && e.target instanceof Node && panelRef.current.contains(e.target)) return;
+      setOpen(false);
+    };
 
     window.addEventListener('resize', place);
     window.addEventListener('scroll', onScroll, true);

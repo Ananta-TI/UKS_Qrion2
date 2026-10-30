@@ -50,15 +50,18 @@ export default async function SettingsPage({
           </div>
         )}
 
+        {/* Kunci dipakai untuk me-reset form saat data dari server berubah.
+            Nilainya diberi awalan berbeda supaya tidak pernah bentrok walau
+            data sekolah dan data akun kebetulan sama. */}
         <CompanyForm
-          key={school.slug ?? 'no-slug'}
+          key={`company:${school.slug ?? 'no-slug'}`}
           school={school}
           email={profile.email ?? user?.email ?? ''}
           canEdit={canEdit}
         />
 
         <PersonalForm
-          key={profile.full_name ?? 'no-name'}
+          key={`personal:${profile.full_name ?? 'no-name'}`}
           fullName={profile.full_name ?? ''}
           email={profile.email ?? user?.email ?? ''}
           role={roleLabel[profile.role] ?? profile.role}

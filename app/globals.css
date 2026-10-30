@@ -75,6 +75,9 @@
   --side-w: 264px;
   --side-x: 18px;
   --gutter: clamp(16px, 1.6vw, 28px);
+  /* Celah header melayang dari tepi atas viewport (dipakai juga oleh
+     elemen sticky lain agar berhenti tepat di bawah header). */
+  --phead-gap: 12px;
   --app-max: 1840px;
   --ease: cubic-bezier(.2, .8, .2, 1);
   color-scheme: light;
@@ -229,10 +232,34 @@ small { font-size: var(--fs-xs); }
 
 .sidebar__scrim { display: none; }
 
-/* page head */
-.phead { flex-wrap: wrap; align-items: flex-end; gap: 14px 28px; margin-bottom: 20px; display: flex; }
+/* page head
+   Kartu glassmorphic melayang seperti sidebar. Header dirender layout
+   (AppFrame) sehingga tidak ter-mount ulang tiap pindah halaman. */
+.phead {
+  position: sticky;
+  /* --phead-top mengikuti bar mobile di layar kecil; --phead-gap celah
+     melayang dari atas. Keduanya dipakai elemen sticky lain di halaman. */
+  top: calc(var(--phead-top, 0px) + var(--phead-gap, 12px));
+  z-index: 30;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 28px;
+  margin-bottom: var(--gap);
+  padding: 14px 18px;
+  display: flex;
+  border: 1px solid var(--glass-nav-line);
+  border-radius: 22px;
+  background:
+    radial-gradient(130% 100% at 18% 0%, #51c59024, transparent 58%),
+    radial-gradient(130% 100% at 82% 100%, #302e591c, transparent 62%),
+    var(--glass-nav);
+  box-shadow: var(--glass-nav-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
 .phead__lead { min-width: 0; }
 .phead__actions { margin-left: auto; flex-wrap: wrap; align-items: center; gap: 8px; display: flex; }
+.phead__tools { flex: none; display: flex; align-items: center; gap: 8px; }
 .top__title { letter-spacing: -.025em; white-space: nowrap; text-overflow: ellipsis; padding-bottom: .06em; font-size: clamp(28px, 2.6vw, 38px); font-weight: 600; line-height: 1.04; overflow: hidden; }
 .crumbs { font-size: var(--fs-sm); color: var(--muted); white-space: nowrap; align-items: center; gap: 6px; margin-bottom: 6px; font-weight: 600; display: flex; overflow: hidden; }
 .crumbs a { align-items: center; min-height: 24px; display: inline-flex; }
@@ -501,6 +528,9 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
 
 /* responsive */
 @media (width <= 1099px) {
+  /* Bar mobile menempel di atas; header halaman harus berhenti di bawahnya,
+     bukan tertutup olehnya. */
+  :root { --phead-top: calc(62px + env(safe-area-inset-top)); }
   .app { padding: calc(62px + env(safe-area-inset-top) + 18px) var(--gutter) 40px; }
   .mobilebar {
     position: fixed;
@@ -544,10 +574,31 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
   :root { --gutter: 14px; }
   .app { padding-top: calc(62px + env(safe-area-inset-top) + 12px); }
   .brand__text small { display: none; }
-  .phead { gap: 12px; margin-bottom: 16px; }
-  .phead__lead { flex: 100%; }
+  /* Mobile: header tidak sticky — ikut tergulung bersama konten. Hanya
+     lonceng yang tetap melayang di sudut kanan atas layar. */
+  .phead {
+    position: static;
+    gap: 12px 14px;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--raised);
+  }
+  /* Baris 1: judul. Baris 2: tombol aksi selebar halaman. */
+  .phead__lead { order: 1; flex: 1 1 auto; min-width: 0; }
+  .phead__actions { order: 3; width: 100%; margin-left: 0; }
+  .phead__tools {
+    position: fixed;
+    z-index: 31;
+    top: calc(62px + env(safe-area-inset-top) + 12px);
+    right: calc(var(--gutter) + 4px);
+  }
+  .phead__tools .notif__btn {
+    background: var(--glass-3);
+    box-shadow: var(--shadow);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+  }
   .top__title { font-size: var(--fs-4xl); }
-  .phead__actions { width: 100%; margin-left: 0; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .kpis > .stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .stat { border-radius: 18px; gap: 4px; padding: 12px 13px; }
@@ -830,7 +881,7 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
 .rpt__strack { background: var(--well); border-radius: 999px; width: 100%; min-width: 100px; height: 7px; display: block; overflow: hidden; }
 .rpt__sfill { background: linear-gradient(90deg, color-mix(in srgb, var(--iris) 35%, var(--surface)), var(--chart)); border-radius: 999px; height: 100%; display: block; transform-origin: left; animation: rpt-grow .8s cubic-bezier(.2, .8, .2, 1) both; }
 .rpt__builder { grid-template-columns: 300px minmax(0, 1fr); align-items: start; gap: var(--gap); display: grid; }
-.rpt__panel { flex-direction: column; gap: var(--gap); display: flex; position: sticky; top: 12px; }
+.rpt__panel { flex-direction: column; gap: var(--gap); display: flex; position: sticky; top: calc(var(--phead-top, 0px) + var(--phead-gap, 12px) + var(--phead-h, 0px) + 12px); }
 .rpt__canvas { min-width: 0; }
 .rpt__plabel { color: var(--faint); letter-spacing: .07em; text-transform: uppercase; font-size: var(--fs-2xs); font-weight: 700; margin: 16px 0 8px; }
 .rpt__metrics { gap: 4px; display: grid; }
@@ -888,7 +939,7 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
 .app--settings > .main { display: grid; grid-template-columns: 232px minmax(0, 1fr); column-gap: 14px; align-items: start; }
 .app--settings > .main > .phead { grid-column: 1 / -1; }
 .app--settings > .main > .view { grid-area: 2 / 2; min-width: 0; }
-.setrail { z-index: 35; position: sticky; top: 24px; grid-area: 2 / 1; align-self: start; width: 232px; max-height: calc(100dvh - 48px); overflow: auto; background: radial-gradient(120% 70% at 8% 0%, #51c5901c, transparent 58%), radial-gradient(120% 70% at 100% 100%, #302e5917, transparent 62%), var(--glass-nav); border: 1px solid var(--glass-nav-line); border-radius: 22px; box-shadow: var(--glass-nav-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); padding: 9px; scrollbar-width: none; }
+.setrail { z-index: 35; position: sticky; top: calc(var(--phead-top, 0px) + var(--phead-gap, 12px) + var(--phead-h, 0px) + 16px); grid-area: 2 / 1; align-self: start; width: 232px; max-height: calc(100dvh - var(--phead-top, 0px) - var(--phead-gap, 12px) - var(--phead-h, 0px) - 32px); overflow: auto; background: radial-gradient(120% 70% at 8% 0%, #51c5901c, transparent 58%), radial-gradient(120% 70% at 100% 100%, #302e5917, transparent 62%), var(--glass-nav); border: 1px solid var(--glass-nav-line); border-radius: 22px; box-shadow: var(--glass-nav-shadow); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); padding: 9px; scrollbar-width: none; }
 .setrail::-webkit-scrollbar { display: none; }
 .setrail__nav { display: grid; gap: 3px; }
 .setrail__item { position: relative; isolation: isolate; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 14px; transition: color .15s var(--ease); }
@@ -934,7 +985,7 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
 .set-note .btn { flex: none; margin-left: auto; }
 
 /* Company preview */
-.set-preview { position: sticky; top: 12px; }
+.set-preview { position: sticky; top: calc(var(--phead-top, 0px) + var(--phead-gap, 12px) + var(--phead-h, 0px) + 12px); }
 .set-doc { background: var(--surface-2); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
 .set-doc__top { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 .set-doc__mark { width: 38px; height: 38px; flex: none; display: grid; place-items: center; background: var(--ink); color: var(--on-ink); border-radius: 12px; }
@@ -965,12 +1016,12 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
 .set-user__mail .ico { width: 12px; height: 12px; flex: none; }
 .set-user__meta { display: grid; justify-items: end; gap: 3px; }
 .set-user__meta small { color: var(--faint); font-size: var(--fs-2xs); }
-.set-roles { position: sticky; top: 12px; }
+.set-roles { position: sticky; top: calc(var(--phead-top, 0px) + var(--phead-gap, 12px) + var(--phead-h, 0px) + 12px); }
 .set-role { padding: 12px 0; border-top: 1px solid var(--line); }
 .set-role:first-of-type { border-top: 0; padding-top: 0; }
 .set-role p { color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; margin-top: 7px; }
 
-.set-live { position: sticky; top: 12px; }
+.set-live { position: sticky; top: calc(var(--phead-top, 0px) + var(--phead-gap, 12px) + var(--phead-h, 0px) + 12px); }
 /* Data */
 .set-data-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-bottom: 14px; }
 .set-data { background: var(--surface-2); border: 1px solid var(--line); border-radius: 13px; padding: 12px; }
@@ -1593,11 +1644,9 @@ textarea.input { border-radius: 16px; height: auto; padding: 10px 16px; resize: 
   .toolbar > .search { flex: 1 1 100%; max-width: 100% !important; }
   .toolbar__spacer { display: none; }
   .toolbar > .btn { flex: 1 1 auto; justify-content: center; }
-  /* Toggle mode tampilan: ikon saja agar hemat ruang di layar kecil. */
-  .toolbar > .seg { flex: 0 0 auto; }
-  .toolbar > .seg .seg__btn { padding: 0 10px; }
-  .toolbar > .seg .seg__label { font-size: 0; gap: 0; }
-  .toolbar > .seg .seg__label .ico { width: 16px; height: 16px; }
+  /* Toggle mode tampilan disembunyikan di layar kecil — halaman memakai
+     mode kartu (lihat useViewMode di halaman siswa). */
+  .toolbar > .seg { display: none; }
 
   /* --- Tabel --- */
   .table-wrap { margin: 0; -webkit-overflow-scrolling: touch; }
