@@ -6,7 +6,6 @@ import { CompanyForm } from './company-form';
 import { PersonalForm } from './personal-form';
 
 const roleLabel: Record<string, string> = {
-  super_admin: 'Super admin',
   school_admin: 'Admin sekolah',
   staff: 'Staf UKS',
 };
@@ -19,7 +18,7 @@ export default async function SettingsPage({
   const { profile, user } = await getSessionProfile();
 
   if (!profile) redirect('/auth/signin');
-  if (!profile.school_id) redirect('/admin');
+  if (!profile.school_id) redirect('/auth/signout?reason=inactive');
 
   const school = profileSchool(profile);
   if (!school) redirect('/');

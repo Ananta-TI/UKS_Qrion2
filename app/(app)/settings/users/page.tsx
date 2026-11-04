@@ -6,13 +6,11 @@ import { SettingsShell } from '@/components/settings/settings-shell';
 import type { Role } from '@/lib/database.types';
 
 const roleLabel: Record<Role, string> = {
-  super_admin: 'Super admin',
   school_admin: 'Admin sekolah',
   staff: 'Staf UKS',
 };
 
 const roleBadge: Record<Role, string> = {
-  super_admin: 'badge badge--plain',
   school_admin: 'badge badge--good',
   staff: 'badge',
 };
@@ -34,7 +32,7 @@ export default async function SettingsUsersPage() {
   const { profile, supabase } = await getSessionProfile();
 
   if (!profile) redirect('/auth/signin');
-  if (!profile.school_id) redirect('/admin');
+  if (!profile.school_id) redirect('/auth/signout?reason=inactive');
 
   const { data: members } = await supabase
     .from('profiles')
@@ -140,13 +138,6 @@ export default async function SettingsUsersPage() {
               Staf UKS
             </span>
             <p>Catat kunjungan dan kelola inventaris; profil sekolah hanya dapat dilihat.</p>
-          </div>
-          <div className="set-role">
-            <span className="spill">
-              <i />
-              Super admin Qrion
-            </span>
-            <p>Akses lintas sekolah untuk membuat akun, mengatur status, dan mendukung operasional.</p>
           </div>
         </section>
       </div>

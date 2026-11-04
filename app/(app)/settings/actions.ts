@@ -24,7 +24,7 @@ export async function updateCompanyProfile(formData: FormData) {
   const { profile, user } = await getSessionProfile();
 
   if (!profile) redirect('/auth/signin');
-  if (!profile.school_id) redirect('/admin');
+  if (!profile.school_id) redirect('/auth/signout?reason=inactive');
 
   if (profile.role !== 'school_admin') {
     fail('Hanya admin sekolah yang dapat mengubah profil.');
@@ -123,8 +123,6 @@ export async function updateCompanyProfile(formData: FormData) {
   revalidatePath('/settings');
   revalidatePath('/settings/users');
   revalidatePath('/');
-  revalidatePath('/admin');
-  revalidatePath(`/admin/schools/${profile.school_id}`);
   redirect(
     `/settings?ok=${encodeURIComponent(
       emailChanged

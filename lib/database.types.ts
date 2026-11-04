@@ -16,7 +16,7 @@ export type Json =
   | Json[];
 
 /** Peran akun di seluruh aplikasi (satu-satunya sumber). */
-export type Role = 'super_admin' | 'school_admin' | 'staff';
+export type Role = 'school_admin' | 'staff';
 
 export type SchoolRow = {
   id: string;
@@ -195,7 +195,6 @@ export type Database = {
     Views: Record<string, never>;
     Functions: {
       current_school_id: { Args: Record<string, never>; Returns: string };
-      is_super_admin: { Args: Record<string, never>; Returns: boolean };
       dispense_medicines: {
         Args: { p_visit_id: string; p_items: Json; p_note?: string | null };
         Returns: Json;

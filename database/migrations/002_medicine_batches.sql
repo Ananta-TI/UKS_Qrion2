@@ -32,8 +32,8 @@ alter table public.medicine_batches enable row level security;
 drop policy if exists "school isolation" on public.medicine_batches;
 create policy "school isolation" on public.medicine_batches
   for all to authenticated
-  using ((select public.is_super_admin()) or school_id = (select public.current_school_id()))
-  with check ((select public.is_super_admin()) or school_id = (select public.current_school_id()));
+  using (school_id = (select public.current_school_id()))
+  with check (school_id = (select public.current_school_id()));
 
 -- ------------------------------------------------------------
 -- Backfill: buat satu batch "saldo awal" dari stok berjalan.

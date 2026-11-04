@@ -33,8 +33,7 @@ drop policy if exists "activity insert" on public.activity_logs;
 create policy "activity read" on public.activity_logs
   for select to authenticated
   using (
-    (select public.is_super_admin())
-    or school_id = (select public.current_school_id())
+    school_id = (select public.current_school_id())
   );
 
 -- Browser menulis lewat /api/activity (service role), tetapi policy ini tetap

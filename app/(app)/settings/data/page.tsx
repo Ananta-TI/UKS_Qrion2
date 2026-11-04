@@ -7,7 +7,7 @@ export default async function SettingsDataPage() {
   const { profile } = await getSessionProfile();
 
   if (!profile) redirect('/auth/signin');
-  if (!profile.school_id) redirect('/admin');
+  if (!profile.school_id) redirect('/auth/signout?reason=inactive');
 
   const school = profileSchool(profile);
   if (!school) redirect('/');

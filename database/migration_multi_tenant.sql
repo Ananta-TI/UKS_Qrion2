@@ -1,7 +1,8 @@
 -- ============================================================
--- MIGRATION: Multi-tenant (banyak sekolah) + Super Admin Qrion
+-- MIGRATION: Multi-tenant (banyak sekolah)
 -- Jalankan SEKALI di Supabase SQL Editor, setelah schema.sql.
 -- Urutan aman untuk data yang sudah ada (backfill otomatis).
+-- Catatan: peran super_admin sudah DIHAPUS (lihat 009_remove_super_admin.sql).
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -28,7 +29,7 @@ where not exists (select 1 from public.schools);
 alter table public.profiles add column if not exists email text;
 alter table public.profiles add column if not exists school_id uuid references public.schools(id) on delete cascade;
 
--- Helper: sekolah user saat ini & cek super admin
+-- Helper: sekolah user saat ini
 -- (dibuat setelah kolom profiles.school_id ada)
 create or replace function public.current_school_id()
 returns uuid
@@ -38,19 +39,6 @@ security definer
 set search_path = public
 as $$
   select school_id from public.profiles where id = auth.uid()
-$$;
-
-create or replace function public.is_super_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role = 'super_admin'
-  )
 $$;
 
 update public.profiles p
@@ -67,12 +55,12 @@ where role = 'admin';
 
 alter table public.profiles
   add constraint profiles_role_check
-  check (role in ('super_admin', 'school_admin', 'staff'));
+  check (role in ('school_admin', 'staff'));
 
 -- semua user lama masuk ke sekolah default
 update public.profiles
 set school_id = (select id from public.schools order by created_at limit 1)
-where school_id is null and role <> 'super_admin';
+where school_id is null;
 
 -- ------------------------------------------------------------
 -- 4) school_id di tabel data + backfill + default
@@ -110,7 +98,7 @@ alter table public.students
   add constraint students_school_nis_key unique (school_id, nis);
 
 -- ------------------------------------------------------------
--- 5) RLS: isolasi per sekolah (super admin bypass)
+-- 5) RLS: isolasi per sekolah
 -- ------------------------------------------------------------
 drop policy if exists "UKS staff full access" on public.students;
 drop policy if exists "UKS staff full access" on public.visits;
@@ -125,23 +113,23 @@ drop policy if exists "school isolation" on public.medicine_logs;
 
 create policy "school isolation" on public.students
   for all to authenticated
-  using ((select public.is_super_admin()) or school_id = (select public.current_school_id()))
-  with check ((select public.is_super_admin()) or school_id = (select public.current_school_id()));
+  using (school_id = (select public.current_school_id()))
+  with check (school_id = (select public.current_school_id()));
 
 create policy "school isolation" on public.visits
   for all to authenticated
-  using ((select public.is_super_admin()) or school_id = (select public.current_school_id()))
-  with check ((select public.is_super_admin()) or school_id = (select public.current_school_id()));
+  using (school_id = (select public.current_school_id()))
+  with check (school_id = (select public.current_school_id()));
 
 create policy "school isolation" on public.medicines
   for all to authenticated
-  using ((select public.is_super_admin()) or school_id = (select public.current_school_id()))
-  with check ((select public.is_super_admin()) or school_id = (select public.current_school_id()));
+  using (school_id = (select public.current_school_id()))
+  with check (school_id = (select public.current_school_id()));
 
 create policy "school isolation" on public.medicine_logs
   for all to authenticated
-  using ((select public.is_super_admin()) or school_id = (select public.current_school_id()))
-  with check ((select public.is_super_admin()) or school_id = (select public.current_school_id()));
+  using (school_id = (select public.current_school_id()))
+  with check (school_id = (select public.current_school_id()));
 
 -- profiles
 drop policy if exists "profiles read" on public.profiles;
@@ -151,15 +139,9 @@ drop policy if exists "profiles super admin" on public.profiles;
 create policy "profiles read" on public.profiles
   for select to authenticated
   using (
-    (select public.is_super_admin())
-    or id = auth.uid()
+    id = auth.uid()
     or school_id = (select public.current_school_id())
   );
-
-create policy "profiles super admin" on public.profiles
-  for all to authenticated
-  using ((select public.is_super_admin()))
-  with check ((select public.is_super_admin()));
 
 -- schools
 drop policy if exists "schools read" on public.schools;
@@ -167,16 +149,11 @@ drop policy if exists "schools super admin" on public.schools;
 
 create policy "schools read" on public.schools
   for select to authenticated
-  using ((select public.is_super_admin()) or id = (select public.current_school_id()));
-
-create policy "schools super admin" on public.schools
-  for all to authenticated
-  using ((select public.is_super_admin()))
-  with check ((select public.is_super_admin()));
+  using (id = (select public.current_school_id()));
 
 -- ------------------------------------------------------------
 -- 6) Trigger user baru: bawa email, role, school_id dari metadata
---    (role super_admin TIDAK bisa dipilih lewat metadata)
+--    (role hanya school_admin/staff; super_admin tidak ada lagi)
 -- ------------------------------------------------------------
 create or replace function public.handle_new_user()
 returns trigger
@@ -208,9 +185,8 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- ------------------------------------------------------------
--- 7) PROMOSI AKUN QRION MENJADI SUPER ADMIN
---    Ganti email di bawah, lalu jalankan baris ini (sekali).
+-- 7) Peran super_admin sudah dihapus.
+--    Untuk menjadikan seseorang admin sekolah, ubah lewat aplikasi
+--    (Pengaturan → Pengguna & peran) atau:
+--      update public.profiles set role = 'school_admin' where id = '...';
 -- ------------------------------------------------------------
--- update public.profiles
--- set role = 'super_admin', school_id = null
--- where id = (select id from auth.users where email = 'admin@qrion.id');

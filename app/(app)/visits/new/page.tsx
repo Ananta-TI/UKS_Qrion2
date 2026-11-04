@@ -20,9 +20,13 @@ import {
   X,
   Plus,
   Minus,
+  History,
 } from 'lucide-react';
 
 type Status = 'back_to_class' | 'referred' | 'picked_up';
+
+/** Saran keluhan dari riwayat: teks + berapa kali pernah dipakai. */
+type ComplaintSuggestion = { text: string; count: number };
 
 const statusOptions: { key: Status; label: string }[] = [
   { key: 'back_to_class', label: visitStatusLabels.back_to_class },
@@ -70,6 +74,44 @@ function VisitForm() {
   const [selectedMeds, setSelectedMeds] = useState<
     { id: string; name: string; unit: string | null; qty: number; stock: number }[]
   >([]);
+
+  // Saran keluhan utama: diambil dari riwayat kunjungan sekolah ini,
+  // diurutkan dari yang paling sering dipakai. RLS membatasi ke sekolah sendiri.
+  const [complaintSuggestions, setComplaintSuggestions] = useState<ComplaintSuggestion[]>([]);
+  const [complaintOpen, setComplaintOpen] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('visits')
+        .select('chief_complaint')
+        .not('chief_complaint', 'is', null)
+        .order('check_in_at', { ascending: false, nullsFirst: false })
+        .limit(1000);
+      const counts = new Map<string, number>();
+      for (const row of data ?? []) {
+        const text = (row.chief_complaint ?? '').trim();
+        if (!text) continue;
+        counts.set(text, (counts.get(text) ?? 0) + 1);
+      }
+      const ranked = [...counts.entries()]
+        .map(([text, count]) => ({ text, count }))
+        .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text));
+      setComplaintSuggestions(ranked);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const complaintQuery = chiefComplaint.trim().toLowerCase();
+  const complaintResults = complaintQuery
+    ? complaintSuggestions
+        .filter(
+          (s) =>
+            s.text.toLowerCase().includes(complaintQuery) &&
+            s.text.toLowerCase() !== complaintQuery
+        )
+        .slice(0, 6)
+    : [];
 
   useEffect(() => {
     (async () => {
@@ -415,13 +457,51 @@ function VisitForm() {
 
             <div className="field field--wide">
               <label className="field__label">Keluhan Utama</label>
-              <input
-                className="input"
-                style={{ borderRadius: 12 }}
-                value={chiefComplaint}
-                onChange={(e) => setChiefComplaint(e.target.value)}
-                placeholder="Demam, pilek, luka ringan…"
-              />
+              <div className="combo">
+                <input
+                  className="input"
+                  style={{ borderRadius: 12 }}
+                  value={chiefComplaint}
+                  onChange={(e) => {
+                    setChiefComplaint(e.target.value);
+                    setComplaintOpen(true);
+                  }}
+                  onFocus={() => setComplaintOpen(true)}
+                  onBlur={() => setTimeout(() => setComplaintOpen(false), 120)}
+                  placeholder="Demam, pilek, luka ringan…"
+                  autoComplete="off"
+                  role="combobox"
+                  aria-expanded={complaintOpen && complaintResults.length > 0}
+                  aria-controls="complaint-suggestions"
+                  aria-autocomplete="list"
+                />
+
+                {complaintOpen && complaintResults.length > 0 && (
+                  <div className="combo__menu" id="complaint-suggestions" role="listbox">
+                    {complaintResults.map((s) => (
+                      <button
+                        key={s.text}
+                        type="button"
+                        role="option"
+                        aria-selected={false}
+                        className="combo__opt"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setChiefComplaint(s.text);
+                          setComplaintOpen(false);
+                        }}
+                      >
+                        <History className="ico muted" />
+                        <span className="grow">{s.text}</span>
+                        <span className="combo__count">{s.count}×</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {complaintOpen && complaintResults.length > 0 && (
+                <span className="field__hint">Dari keluhan yang pernah dicatat di sekolah ini.</span>
+              )}
             </div>
 
             <div className="sheet__grid">

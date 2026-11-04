@@ -6,7 +6,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { profile } = await getSessionProfile();
 
   if (!profile) redirect('/auth/signin');
-  if (profile.role === 'super_admin') redirect('/admin');
   if (!schoolIsActive(profile)) redirect('/auth/signout?reason=inactive');
 
   const school = profileSchool(profile);

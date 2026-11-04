@@ -28,7 +28,7 @@ const categories = [
   { id: 'inventaris', label: 'Inventaris', desc: 'Stok obat & kedaluwarsa', icon: Package },
   { id: 'laporan', label: 'Laporan', desc: 'Statistik & export', icon: BarChart3 },
   { id: 'akun', label: 'Akun & Akses', desc: 'Login, password, akses', icon: ShieldCheck },
-  { id: 'sekolah', label: 'Multi-sekolah', desc: 'Isolasi data & super admin', icon: Building2 },
+  { id: 'sekolah', label: 'Keamanan data', desc: 'Isolasi data sekolah', icon: Building2 },
 ] satisfies { id: CategoryId; label: string; desc: string; icon: typeof Users }[];
 
 type Faq = {
@@ -92,7 +92,7 @@ const faqs: Faq[] = [
     id: 'lupa-password',
     category: 'akun',
     q: 'Lupa password atau butuh akun baru?',
-    a: 'Hubungi admin sekolah Anda. Admin sekolah dapat meminta reset password kepada tim Qrion, yang dapat memperbaruinya dari halaman detail sekolah di panel super admin.',
+    a: 'Hubungi admin sekolah Anda. Admin sekolah dapat menghubungi tim Qrion untuk reset password atau pembuatan akun baru.',
     keywords: 'reset login akun akses',
   },
   {
@@ -146,15 +146,15 @@ const faqs: Faq[] = [
     id: 'isolasi-data',
     category: 'sekolah',
     q: 'Apakah data sekolah lain bisa terlihat?',
-    a: 'Tidak. Setiap akun terikat pada satu sekolah, dan aturan keamanan database hanya menampilkan data milik sekolah tersebut. Hanya super admin Qrion yang dapat melihat data seluruh sekolah.',
+    a: 'Tidak. Setiap akun terikat pada satu sekolah, dan aturan keamanan database hanya menampilkan data milik sekolah tersebut. Data sekolah lain tidak dapat diakses dari akun mana pun.',
     keywords: 'privasi rls keamanan tenant',
   },
   {
-    id: 'login-sekolah',
+    id: 'tambah-akun',
     category: 'sekolah',
-    q: 'Bagaimana super admin login sebagai sekolah?',
-    a: 'Di panel super admin, klik Login pada baris sekolah. Sesi akan berganti menjadi akun sekolah tersebut. Untuk kembali ke panel super admin, klik Keluar lalu masuk lagi dengan akun Qrion.',
-    keywords: 'impersonate impersonasi super admin',
+    q: 'Bagaimana menambah akun staf baru?',
+    a: 'Akun dibuat oleh tim Qrion atas permintaan admin sekolah. Setiap akun baru otomatis terikat ke sekolah Anda dan hanya dapat melihat data sekolah tersebut. Untuk mengajukan akun baru, hubungi admin sekolah Anda.',
+    keywords: 'akun baru staf pengguna tambah undang',
   },
 ];
 

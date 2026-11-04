@@ -2,8 +2,7 @@
 -- Seed katalog obat UKS — lengkap & idempotent
 --
 -- Data ini terikat ke SEBUAH SEKOLAH (school_id), bukan ke akun.
--- Semua akun (profiles) yang school_id-nya sama akan ikut melihatnya;
--- super admin melihat semua sekolah.
+-- Semua akun (profiles) yang school_id-nya sama akan ikut melihatnya.
 --
 -- Sekolah tujuan ditentukan di blok `target` (lihat penanda GANTI EMAIL).
 -- Default: sekolah milik akun UKS Anda, yaitu anantafirdaus14@gmail.com.

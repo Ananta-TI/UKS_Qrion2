@@ -8,7 +8,7 @@ export default async function SignInPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { profile } = await getSessionProfile();
-  if (profile) redirect(profile.role === 'super_admin' ? '/admin' : '/');
+  if (profile) redirect('/');
 
   const { error } = await searchParams;
   return <SignInForm initialError={error ?? null} />;

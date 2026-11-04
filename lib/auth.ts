@@ -20,7 +20,7 @@ export type SessionProfile = {
   id: string;
   email: string | null;
   full_name: string | null;
-  role: 'super_admin' | 'school_admin' | 'staff';
+  role: 'school_admin' | 'staff';
   school_id: string | null;
   schools?: SchoolSummary | SchoolSummary[] | null;
 };

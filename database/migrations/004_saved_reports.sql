@@ -30,5 +30,5 @@ alter table public.saved_reports enable row level security;
 drop policy if exists "school isolation" on public.saved_reports;
 create policy "school isolation" on public.saved_reports
   for all to authenticated
-  using ((select public.is_super_admin()) or school_id = (select public.current_school_id()))
-  with check ((select public.is_super_admin()) or school_id = (select public.current_school_id()));
+  using (school_id = (select public.current_school_id()))
+  with check (school_id = (select public.current_school_id()));
