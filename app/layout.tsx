@@ -1,11 +1,13 @@
-import { Urbanist } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/components/ui/toast';
 
-const urbanist = Urbanist({
+// Inter dipakai sebagai pengganti SF Pro di platform non-Apple. Di macOS/iOS
+// tumpukan font di globals.css memilih -apple-system lebih dulu (SF asli).
+const inter = Inter({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
-  variable: '--font-urbanist',
+  variable: '--font-inter',
   display: 'swap',
 });
 
@@ -21,7 +23,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className={urbanist.variable}>
+    <html lang="id" className={inter.variable}>
       <body>
         <ToastProvider>{children}</ToastProvider>
       </body>

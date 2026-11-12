@@ -2,6 +2,8 @@
 
 > Salin **seluruh isi dokumen ini** ke temanmu (atau tempel sebagai instruksi awal ke AI coding assistant-nya).
 > Tujuannya supaya tampilan aplikasinya searah dengan punyamu: token, layout, komponen, animasi, dan perilaku responsif yang sama.
+>
+> **Status (Nov 2026):** aplikasi memakai **Cupertino × Glassmorphism**: struktur & tipografi ala Apple HIG, permukaan kaca translusen di atas mesh gradient lembut, aksen hijau `#35bb82`. Token di §2 adalah acuan utama. Beberapa snippet komponen di §4–§9 mungkin masih menyebut nilai lama — bila berbeda, ikuti token §2.
 
 ---
 
@@ -28,7 +30,7 @@ Aturan kerja:
 | Utility CSS | **Tailwind** — hanya untuk layout cepat; komponen inti pakai class semantik |
 | Animasi | **framer-motion v14** (hanya untuk layout/enter-exit) + **CSS keyframes** (untuk dekoratif) |
 | Ikon | **lucide-react** |
-| Font | **Urbanist** (via `next/font`, variable) |
+| Font | **SF Pro / `-apple-system`**, fallback **Inter** (via `next/font`) |
 | Angka | `font-variant-numeric: tabular-nums` di seluruh body |
 
 **Prinsip styling yang tidak boleh dilanggar:**
@@ -42,53 +44,56 @@ Aturan kerja:
 
 ```css
 :root {
-  /* ---- Tipografi ---- */
-  --font: var(--font-urbanist), "Urbanist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --fs-2xs: 11px;  --fs-xs: 12px;  --fs-sm: 12.5px; --fs-md: 13.5px;
-  --fs-base: 14px; --fs-lg: 15px; --fs-xl: 17px;   --fs-2xl: 20px;
-  --fs-3xl: 22px;  --fs-4xl: 26px; --fs-display: 34px;
+  /* ---- Tipografi (SF Pro di Apple, Inter di platform lain) ---- */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    var(--font-inter), "Inter", "Helvetica Neue", "Segoe UI", sans-serif;
+  --fs-2xs: 11px;  --fs-xs: 12px;  --fs-sm: 13px; --fs-md: 14px;
+  --fs-base: 15px; --fs-lg: 16px; --fs-xl: 17px;   --fs-2xl: 20px;
+  --fs-3xl: 24px;  --fs-4xl: 28px; --fs-display: 34px;
 
-  /* ---- Permukaan & kaca (glassmorphism) ---- */
-  --bg: #ffffff;
-  --mesh-a: #e8faf1;  --mesh-b: #edecf7;  --mesh-c: #ffffff;
-  --glass:   #ffffff8f;   /* kaca 56% */
-  --glass-2: #ffffffb3;   /* kaca 70% */
-  --glass-3: #ffffffe0;   /* kaca 88% */
-  --glass-nav: linear-gradient(135deg, #ffffffd1 0%, #ffffff94 46%, #ffffffb8 100%);
+  /* ---- Permukaan (Cupertino × glassmorphism) ---- */
+  --bg: #f4f9f6;
+  --mesh-a: #c9f2df;        /* blob hijau lembut */
+  --mesh-b: #dcebf5;        /* blob biru dingin */
+  --mesh-c: #ffffff;
+  --glass: #ffffffa3;       /* kartu kaca 64% */
+  --glass-2: #ffffffc2;     /* kontrol kaca 76% */
+  --glass-3: #ffffffe0;     /* kaca 88% */
+  --glass-nav: linear-gradient(135deg, #ffffffd6 0%, #ffffff9e 46%, #ffffffbf 100%);
   --glass-nav-line: #ffffffd9;
   --glass-nav-shadow:
-    0 18px 44px -22px #302e5947,
-    0 2px 10px #302e5914,
+    0 18px 44px -22px #163d2e42,
+    0 2px 10px #163d2e14,
     inset 0 1px 0 #fffffff2,
-    inset 0 -1px 0 #302e590d;
+    inset 0 -1px 0 #163d2e0d;
   --glass-blur: blur(26px) saturate(190%);
-  --rim: #fffc; /* garis tepi kaca */
+  --rim: #fffc;             /* garis tepi kaca */
 
-  --surface: #f8f8f6;
-  --surface-2: #ffffff94;
-  --raised: #fcfcfb;
-  --well: #302e590f;
-  --line: #302e5917;
-  --line-2: #302e5929;
+  --surface: #f6faf8;
+  --surface-2: #ffffff9e;
+  --raised: #fcfdfc;
+  --well: #163d2e0f;
+  --line: #163d2e17;
+  --line-2: #163d2e29;
 
-  --shadow:      0 1px 0 #ffffffb3 inset, 0 24px 48px -30px #302e5938;
-  --shadow-pop:  0 24px 60px -18px #302e5947, 0 2px 6px #302e5912;
+  --shadow:      0 1px 0 #ffffffb3 inset, 0 24px 48px -30px #163d2e38;
+  --shadow-pop:  0 24px 60px -18px #163d2e47, 0 2px 6px #163d2e12;
 
   /* ---- Teks & warna dasar ---- */
-  --text: #111;
-  --muted: #5c5c5a;
-  --faint: #73736f;
-  --ink: #302e59;         /* navy brand (juga warna pill aktif) */
+  --text: #111814;
+  --muted: #5a6660;
+  --faint: #74807a;
+  --ink: #1f3b30;           /* dark card / filled chip */
   --on-ink: #ffffff;
 
   /* ---- Brand / aksi ---- */
-  --primary: var(--iris);      /* hijau mint */
-  --on-primary: #111111;
-  --primary-ink: #1d7a52;      /* teks hijau di atas latar terang */
-  --accent: #51c590;
-  --on-accent: #111111;
-  --iris: #51c590;
-  --dot: #302e59;
+  --primary: var(--iris);   /* hijau aksen */
+  --on-primary: #ffffff;    /* teks putih di atas hijau */
+  --primary-ink: #1d7a52;   /* link hijau di latar terang */
+  --accent: #35bb82;
+  --on-accent: #ffffff;
+  --iris: #35bb82;
+  --dot: #1f3b30;
 
   /* ---- Chart ---- */
   --chart: var(--iris);
@@ -97,16 +102,16 @@ Aturan kerja:
   --chart-grid: color-mix(in srgb, var(--text) 9%, transparent);
 
   /* ---- Semantik ---- */
-  --good: #237a48;  --warn: #8f6000;  --bad: #bf3644;
-  --coral:#ff4d4d;  --amber:#a87406;  --teal:#2a7f4d;  --sky:#2d6cb0;
-  --rose:#c43f4c;   --lime:#6f8f1c;   --slate:#637083; --plum:#8f6243;
+  --good: #248a3d;  --warn: #b25000;  --bad: #d70015;
+  --coral:#ff3b30;  --amber:#ff9500;  --teal:#30b0c7;  --sky:#2d6cb0;
+  --rose:#ff2d55;   --lime:#a2c11c;   --slate:#8e8e93; --plum:#a2845e;
 
   --soft: 14%; /* tingkat transparansi badge/tag */
 
   /* ---- Bentuk & jarak ---- */
-  --r-card: 24px;
-  --r-tile: 16px;
-  --r-ctl: 999px;      /* kontrol selalu pill */
+  --r-card: 18px;
+  --r-tile: 12px;
+  --r-ctl: 10px;       /* kontrol: kotak membulat, BUKAN pill */
   --gap: 16px;
   --side-w: 264px;
   --side-x: 18px;
@@ -119,27 +124,29 @@ Aturan kerja:
 }
 ```
 
-**Gradien pill aktif (nav/sidebar/segmen)** — dipakai berulang:
+**Pill aktif (nav/segmen)** — hijau `#35bb82` untuk navigasi, putih + shadow untuk segmented control:
 ```css
-background: linear-gradient(145deg, #3b3868 0%, #302e59 55%, #272547 100%);
-box-shadow: 0 10px 22px -12px #302e5999, inset 0 1px 0 #ffffff2b, inset 0 -1px 0 #0000001f;
+/* sidebar & settings rail */
+background: var(--primary);
+color: var(--on-primary);
+box-shadow: 0 6px 16px -8px #35bb8266;
+
+/* segmented control (dash-seg, seg, rpt__tabs, set-tabs) */
+background: #fff;
+box-shadow: 0 1px 3px #0000001f, 0 1px 1px #0000000a;
 ```
 
 ---
 
 ## 3. Bahasa visual singkat
 
-- **Gaya:** clean, lembut, "floating glass" di atas latar putih dengan **mesh gradient** blur di belakang.
-- **Latar:** `<div class="mesh">` fixed, 3 bulatan radial-gradient ber-blur 60px, `z-index:-1`, `pointer-events:none`. Bentuk latar mesh:
-  ```css
-  .mesh i { filter: blur(60px); opacity:.95; border-radius:50%; position:absolute; }
-  .mesh__a { background: radial-gradient(closest-side, var(--mesh-a), transparent); width:62vmax; height:62vmax; top:-24vmax; left:-18vmax; }
-  .mesh__b { background: radial-gradient(closest-side, var(--mesh-b), transparent); width:70vmax; height:70vmax; bottom:-30vmax; right:-24vmax; }
-  .mesh__c { background: radial-gradient(closest-side, var(--mesh-c), transparent); width:46vmax; height:46vmax; top:-16vmax; right:8vmax; }
-  ```
-- **Semua permukaan besar** (sidebar, header, rail, kartu, KPI) memakai **kaca**: `--glass` atau `--glass-nav` + `--glass-blur` + `--glass-nav-shadow` + border `--rim`/`--glass-nav-line`.
-- **Radius:** kartu besar 24px, tile 16px, kontrol (btn/input/chip/badge) selalu **pill 999px**.
-- **Warna aksen dominan:** hijau mint `#51c590`. Navy `#302e59` untuk elemen "terpilih/dark".
+- **Gaya:** Cupertino × glassmorphism — struktur & tipografi Apple HIG, permukaan kaca translusen di atas mesh gradient lembut, aksen **hijau `#35bb82`**.
+- **Latar:** `var(--bg)` `#f4f9f6` + `.mesh` fixed berisi 3 blob radial-gradient ber-blur 60px (`--mesh-a` hijau, `--mesh-b` biru dingin, `--mesh-c` putih), `z-index:-1`, `pointer-events:none`.
+- **Kaca:** kartu, stat, KPI, sidebar, header, rail, dan search memakai `--glass`/`--glass-2`/`--glass-nav` + hairline `--rim`/`--glass-nav-line` + `--shadow`/`--glass-nav-shadow` (dengan inset highlight putih tipis). Header/sidebar/rail memakai `--glass-blur` (`blur(26px) saturate(190%)`).
+- **Radius:** kartu 18px, tile 12px, kontrol (btn/input/chip) **10px**. Badge, meter, dan avatar tetap membulat (pill/lingkaran).
+- **Tipografi:** SF Pro/Inter, body 15px, judul tebal 600–700, letter-spacing rapat (`-.02em`) pada judul. Label kecil **bukan** uppercase.
+- **Bayangan:** inset highlight putih + ambient hijau-gelap yang sangat tipis.
+- **Warna aksen dominan:** hijau `#35bb82`; semua teks di atas latar hijau memakai putih (`--on-primary` / `--on-accent`). Hijau status positif tetap `#248a3d`.
 - **Tidak ada dark mode.** Selalu terang.
 
 ---
@@ -152,7 +159,7 @@ box-shadow: 0 10px 22px -12px #302e5999, inset 0 1px 0 #ffffff2b, inset 0 -1px 0
 ├── .mesh                       ← latar dekoratif
 ├── <header class="mobilebar">  ← hanya tampil ≤1099px
 ├── <div class="sidebar__scrim"> (hanya saat drawer terbuka)
-├── <aside class="sidebar">     ← fixed, glass, radius 24px
+├── <aside class="sidebar">     ← fixed, glass, radius 20px
 ├── <div class="app">           ← max-width 1840px, padding kiri = lebar sidebar
 │   └── <main class="main">
 │       ├── <PageHeader>        ← .phead, glass, sticky, PERSISTEN
@@ -187,11 +194,8 @@ box-shadow: 0 10px 22px -12px #302e5999, inset 0 1px 0 #ffffff2b, inset 0 -1px 0
   display: flex; flex-direction: column;
   color: var(--ink);
   border: 1px solid var(--glass-nav-line);
-  border-radius: 24px;
-  background:
-    radial-gradient(130% 100% at 18% 0%, #51c59024, transparent 58%),
-    radial-gradient(130% 100% at 82% 100%, #302e591c, transparent 62%),
-    var(--glass-nav);
+  border-radius: 20px;
+  background: var(--glass-nav);
   box-shadow: var(--glass-nav-shadow);
   backdrop-filter: var(--glass-blur);
   overflow: hidden;
@@ -208,8 +212,8 @@ Isi sidebar (atas→bawah): brand logo → tombol "Cari apa saja (Ctrl K)" → n
 .sidenav__item:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .sidenav__item[aria-current=page] { color: var(--on-ink); }
 .sidenav__pill { position:absolute; inset:0; z-index:0; pointer-events:none; border-radius:14px;
-  background: linear-gradient(145deg,#3b3868 0%,#302e59 55%,#272547 100%);
-  box-shadow: 0 10px 22px -12px #302e5999, inset 0 1px 0 #ffffff2b, inset 0 -1px 0 #0000001f; }
+  background: var(--primary);
+  box-shadow: 0 6px 16px -8px #35bb8266; }
 .sidenav__ico, .sidenav__text, .sidenav__dot { position: relative; z-index: 1; }
 .sidenav__ico { width:34px; height:34px; display:grid; place-items:center;
   border:1px solid var(--rim); border-radius:10px; background: var(--glass-2); }
@@ -223,10 +227,10 @@ Pill dipindah antar item dengan framer-motion `layoutId` (lihat §6).
 ### 5.1 Tombol
 ```css
 .btn { height:42px; font-weight:600; font-size:var(--fs-md); white-space:nowrap;
-  border:1px solid transparent; border-radius:999px; display:inline-flex; align-items:center;
+  border:1px solid transparent; border-radius:var(--r-ctl); display:inline-flex; align-items:center;
   justify-content:center; gap:8px; padding:0 18px; transition: filter .15s, background .15s; }
-.btn--primary { background: var(--primary); color: var(--on-primary); }   /* hover: filter:brightness(1.18) */
-.btn--ghost   { border-color: var(--line-2); background: var(--glass); }   /* hover: background:var(--glass-2) */
+.btn--primary { background: var(--primary); color: var(--on-primary); }   /* hover: filter:brightness(.94) */
+.btn--ghost   { border-color: transparent; background: var(--glass-2); }  /* hover: background:var(--glass-3) */
 .btn--soft    { background: color-mix(in srgb, var(--iris) var(--soft), transparent); color: var(--primary-ink); }
 .btn--danger  { background: var(--bad); color:#fff; }
 .btn--sm { height:36px; font-size:var(--fs-sm); padding:0 14px; }
@@ -241,7 +245,7 @@ Pill dipindah antar item dengan framer-motion `layoutId` (lihat §6).
 .card__head { display:flex; justify-content:space-between; align-items:center; gap:12px;
   min-height:40px; margin-bottom:14px; }
 .card__title { display:flex; align-items:center; gap:10px; font-size:var(--fs-lg); font-weight:600; }
-.card__title > .ico { width:34px; height:34px; padding:8px; border-radius:50%;
+.card__title > .ico { width:34px; height:34px; padding:8px; border-radius:9px;
   background:var(--glass-2); border:1px solid var(--rim); }
 
 .kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr));
@@ -272,7 +276,7 @@ Pill dipindah antar item dengan framer-motion `layoutId` (lihat §6).
 ### 5.4 Input & pencarian
 ```css
 .input, .search { height:42px; border:1px solid var(--line-2); background:var(--glass-2);
-  border-radius:999px; padding:0 16px; outline:none; }
+  border-radius:var(--r-ctl); padding:0 16px; outline:none; }
 .input:focus, .search:focus-within { border-color: var(--text); }
 .search { display:inline-flex; align-items:center; gap:8px; color:var(--muted); }
 textarea.input { border-radius:16px; height:auto; padding:10px 16px; resize:vertical; }
@@ -283,7 +287,7 @@ textarea.input { border-radius:16px; height:auto; padding:10px 16px; resize:vert
 
 ### 5.5 Chip / segmen
 ```css
-.chip { height:34px; border-radius:999px; border:1px solid var(--line); background:var(--glass-2);
+.chip { height:34px; border-radius:8px; border:1px solid transparent; background:var(--glass-2);
   display:inline-flex; align-items:center; gap:6px; padding:0 13px; font-weight:600; font-size:var(--fs-sm); }
 .chip[aria-pressed=true] { background: var(--ink); color: var(--on-ink); border-color: transparent; }
 ```
@@ -444,11 +448,8 @@ Untuk framer-motion, cek `useReducedMotion()` dan matikan transform bila aktif.
   display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px;
   margin-bottom: var(--gap); padding: 14px 18px;
   border: 1px solid var(--glass-nav-line);
-  border-radius: 22px;
-  background:
-    radial-gradient(130% 100% at 18% 0%, #51c59024, transparent 58%),
-    radial-gradient(130% 100% at 82% 100%, #302e591c, transparent 62%),
-    var(--glass-nav);
+  border-radius: 18px;
+  background: var(--glass-nav);
   box-shadow: var(--glass-nav-shadow);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
@@ -456,7 +457,7 @@ Untuk framer-motion, cek `useReducedMotion()` dan matikan transform bila aktif.
 .phead__lead { min-width: 0; }
 .phead__actions { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .phead__tools  { flex: none; display: flex; align-items: center; gap: 8px; }
-.top__title { font-size: clamp(28px,2.6vw,38px); font-weight:600; letter-spacing:-.025em;
+.top__title { font-size: clamp(26px,2.4vw,34px); font-weight:700; letter-spacing:-.022em;
   line-height:1.04; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .crumbs { display:flex; align-items:center; gap:6px; margin-bottom:6px;
   font-size:var(--fs-sm); font-weight:600; color:var(--muted); }
@@ -520,7 +521,7 @@ top: calc(var(--phead-top,0px) + var(--phead-gap,12px) + var(--phead-h,0px) + 12
 
 - [ ] Semua token §2 terpasang; tidak ada hex/ukuran hardcode di komponen.
 - [ ] Latar mesh 3 bulatan blur tampil di belakang seluruh halaman.
-- [ ] Sidebar & header = kartu glass radius 22–24px dengan shadow glass yang sama.
+- [ ] Sidebar & header = kartu glass radius 18–20px dengan shadow glass yang sama.
 - [ ] Header **tidak remount** saat pindah halaman (isi berubah, elemen DOM tetap).
 - [ ] Mobile ≤760px: header tergulung, **hanya lonceng** yang fixed di kanan atas.
 - [ ] Panel notifikasi bisa **di-scroll** tanpa tertutup; klik luar / Esc / scroll halaman menutupnya.
@@ -541,5 +542,6 @@ top: calc(var(--phead-top,0px) + var(--phead-gap,12px) + var(--phead-h,0px) + 12
 - ❌ Menggunakan `transform` pada wrapper `.view` (mengurung elemen `fixed`).
 - ❌ `useEffect` untuk mengisi header (pakai `useLayoutEffect`).
 - ❌ Key React dari dua sumber data berbeda tanpa prefiks unik.
-- ❌ Warna aksen selain mint `#51c590` untuk primary.
+- ❌ Warna aksen selain hijau `#35bb82` untuk primary. Semua teks di atas latar hijau harus putih.
+- ❌ Menghidupkan kembali pill `999px` pada kontrol (btn/input/chip) atau mematikan mesh gradient — mesh + kaca adalah identitas visual aplikasi.
 - ❌ Mengubah nilai token hanya karena "kelihatan lebih pas" — harus identik.

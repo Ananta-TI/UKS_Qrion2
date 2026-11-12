@@ -5,9 +5,13 @@ import { createPortal } from 'react-dom';
 import { createClient } from '@/lib/supabase/client';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
+import { Pager } from '@/components/ui/pager';
 import { Search, ClipboardList, Plus, Stethoscope, Printer, X } from 'lucide-react';
 import Link from 'next/link';
 import { visitStatusLabel, visitStatusLabels } from '@/lib/visit-status';
+
+/** Jumlah kunjungan per halaman. */
+const PAGE_SIZE = 25;
 
 type VisitRow = {
   id: string;
@@ -60,6 +64,8 @@ export default function VisitsPage() {
   const supabase = createClient();
   const [visits, setVisits] = useState<VisitRow[]>([]);
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [school, setSchool] = useState<SchoolInfo | null>(null);
   const [printVisit, setPrintVisit] = useState<VisitRow | null>(null);
@@ -81,20 +87,25 @@ export default function VisitsPage() {
   useEffect(() => {
     let cancelled = false;
     const term = query.trim();
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
 
-    // Daftar awal dibatasi 100 kunjungan terbaru. Saat mencari, pencarian
-    // dijalankan ke server agar menjangkau seluruh riwayat, bukan hanya 100 baris.
+    // Seluruh riwayat dijangkau lewat paginasi server (range + count).
+    // Saat mencari, nama/NIS diresolusi dulu ke id siswa, lalu daftar
+    // kunjungannya dipaginasi dengan filter yang sama.
     const timer = setTimeout(async () => {
       setLoading(true);
       let rows: VisitRow[] = [];
+      let count = 0;
 
       if (!term) {
-        const { data } = await supabase
+        const { data, count: totalRows } = await supabase
           .from('visits')
-          .select('*, students(*)')
+          .select('*, students(*)', { count: 'exact' })
           .order('check_in_at', { ascending: false })
-          .limit(100);
+          .range(from, to);
         rows = (data ?? []) as unknown as VisitRow[];
+        count = totalRows ?? 0;
       } else {
         const { data: matches } = await supabase
           .from('students')
@@ -104,18 +115,20 @@ export default function VisitsPage() {
         const ids = (matches ?? []).map((s) => s.id);
 
         if (ids.length) {
-          const { data } = await supabase
+          const { data, count: totalRows } = await supabase
             .from('visits')
-            .select('*, students(*)')
+            .select('*, students(*)', { count: 'exact' })
             .in('student_id', ids)
             .order('check_in_at', { ascending: false })
-            .limit(100);
+            .range(from, to);
           rows = (data ?? []) as unknown as VisitRow[];
+          count = totalRows ?? 0;
         }
       }
 
       if (cancelled) return;
       setVisits(rows);
+      setTotal(count);
       setLoading(false);
     }, 250);
 
@@ -124,7 +137,7 @@ export default function VisitsPage() {
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  }, [query, page]);
 
   useEffect(() => {
     if (!printVisit) return;
@@ -143,8 +156,6 @@ export default function VisitsPage() {
     };
   }, [printVisit]);
 
-  const filtered = visits;
-
   return (
     <AppShell
       title="Rekam Medis"
@@ -161,13 +172,16 @@ export default function VisitsPage() {
             <Search className="ico" />
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(0);
+              }}
               placeholder="Cari nama siswa atau NIS…"
               aria-label="Cari kunjungan"
             />
           </div>
           <span className="toolbar__spacer" />
-          <span className="spill spill--iris"><i /><CountUp value={filtered.length} /> kunjungan</span>
+          <span className="spill spill--iris"><i /><CountUp value={total} /> kunjungan</span>
         </div>
 
         {loading ? (
@@ -191,7 +205,7 @@ export default function VisitsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {visits.length === 0 ? (
                   <tr>
                     <td colSpan={8}>
                       <div className="empty">
@@ -202,7 +216,7 @@ export default function VisitsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((v, i) => {
+                  visits.map((v, i) => {
                     const st = statusMap[v.final_status ?? ''] ?? { label: '-', cls: 'badge badge--plain' };
                     const vitals = [
                       v.temperature ? `${v.temperature}°C` : null,
@@ -252,10 +266,12 @@ export default function VisitsPage() {
         )}
       </div>
 
-      {!query.trim() && visits.length > 0 && (
+      <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} unit="kunjungan" />
+
+      {!query.trim() && total > 0 && (
         <div className="note" style={{ marginTop: 16 }}>
           <Stethoscope className="ico" />
-          <div>Menampilkan 100 kunjungan terbaru. Ketik nama atau NIS untuk mencari di seluruh riwayat.</div>
+          <div>Seluruh riwayat kunjungan ditampilkan per halaman. Ketik nama atau NIS untuk mempersempit hasil.</div>
         </div>
       )}
 

@@ -9,7 +9,7 @@ export type ChartColors = {
 };
 
 /** Nilai cadangan bila CSS variable belum terbaca (mis. saat pra-render). */
-const fallback: ChartColors = { primary: '#51c590', secondary: '#302e59', soft: '#51c590' };
+const fallback: ChartColors = { primary: '#35bb82', secondary: '#1f3b30', soft: '#35bb82' };
 
 function readChartColors(): ChartColors {
   if (typeof window === 'undefined') return fallback;

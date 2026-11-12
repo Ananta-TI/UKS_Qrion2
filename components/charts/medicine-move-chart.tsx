@@ -32,7 +32,7 @@ export default function MedicineMoveChart({
       <EChartsAreaChart.Area
         dataKey="masuk"
         name="Masuk"
-        color="#51c590"
+        color="#35bb82"
         variant="gradient"
         strokeVariant="solid"
         strokeWidth={2.5}
@@ -40,7 +40,7 @@ export default function MedicineMoveChart({
       <EChartsAreaChart.Area
         dataKey="keluar"
         name="Keluar"
-        color="#bf3644"
+        color="#d70015"
         variant="solid"
         strokeVariant="dashed"
         strokeWidth={2.5}

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
+import { Pager } from '@/components/ui/pager';
 import { useToast } from '@/components/ui/toast';
 import { fetchAllRows } from '@/lib/supabase/paginate';
 import {
@@ -34,6 +35,9 @@ import {
 
 type Filter = 'all' | 'low' | 'expiring';
 
+/** Jumlah obat per halaman. */
+const PAGE_SIZE = 25;
+
 /** Modal dirender di body agar tidak terkurung ancestor ber-overflow/transform. */
 function ModalPortal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body);
@@ -49,6 +53,7 @@ function InventoryPageInner() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [page, setPage] = useState(0);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<MedicineRow | null>(null);
   const [saving, setSaving] = useState(false);
@@ -108,6 +113,12 @@ function InventoryPageInner() {
       (filter === 'expiring' && expiryWarningOf(m));
     return matchQ && matchF;
   });
+
+  // Paginasi di klien: seluruh obat sudah dimuat untuk hitungan KPI & filter.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Jaga halaman tetap valid saat data menyusut (mis. obat terakhir dihapus).
+  const currentPage = Math.min(page, totalPages - 1);
+  const paged = filtered.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE);
 
   async function addStock(id: string, qty: number) {
     const m = medicines.find((x) => x.id === id);
@@ -378,19 +389,46 @@ function InventoryPageInner() {
             <Search className="ico" />
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(0);
+              }}
               placeholder="Cari obat atau kategori…"
               aria-label="Cari obat"
             />
           </div>
           <div className="chips">
-            <button type="button" className="chip" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
+            <button
+              type="button"
+              className="chip"
+              aria-pressed={filter === 'all'}
+              onClick={() => {
+                setFilter('all');
+                setPage(0);
+              }}
+            >
               Semua <b>{medicines.length}</b>
             </button>
-            <button type="button" className="chip" aria-pressed={filter === 'low'} onClick={() => setFilter('low')}>
+            <button
+              type="button"
+              className="chip"
+              aria-pressed={filter === 'low'}
+              onClick={() => {
+                setFilter('low');
+                setPage(0);
+              }}
+            >
               Menipis <b>{lowStock}</b>
             </button>
-            <button type="button" className="chip" aria-pressed={filter === 'expiring'} onClick={() => setFilter('expiring')}>
+            <button
+              type="button"
+              className="chip"
+              aria-pressed={filter === 'expiring'}
+              onClick={() => {
+                setFilter('expiring');
+                setPage(0);
+              }}
+            >
               Kedaluwarsa <b>{expiring}</b>
             </button>
           </div>
@@ -424,7 +462,7 @@ function InventoryPageInner() {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((m) => {
+                  paged.map((m) => {
                     const low = lowOf(m);
                     const exp = expiryWarningOf(m);
                     return (
@@ -480,6 +518,8 @@ function InventoryPageInner() {
           </div>
         )}
       </div>
+
+      <Pager page={currentPage} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} unit="obat" />
 
       {open && (
         <ModalPortal>

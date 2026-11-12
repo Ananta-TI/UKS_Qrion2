@@ -143,7 +143,7 @@ export function EChartsAreaChart({
         area.color ??
         (colors && colors.length > 0 ? colors[0] : undefined) ??
         cfg?.color ??
-        (idx === 0 ? '#10b981' : idx === 1 ? '#0ea5e9' : '#8b5cf6');
+        (idx === 0 ? '#35bb82' : idx === 1 ? '#8e8e93' : '#1f3b30');
 
       const secondaryColor =
         (colors && colors.length > 1 ? colors[1] : undefined) ?? primaryColor;
