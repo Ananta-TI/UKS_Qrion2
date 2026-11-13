@@ -9,6 +9,7 @@ export type ActivityAction =
   | 'delete'
   | 'restock'
   | 'stock_out'
+  | 'adjust'
   | 'export'
   | 'impersonate';
 

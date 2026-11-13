@@ -14,6 +14,8 @@ import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import { getAuthUser } from '@/lib/auth';
 import { visitStatusLabel } from '@/lib/visit-status';
+import { ageFromBirthDate, formatDateId } from '@/lib/utils';
+import type { StudentGender } from '@/lib/database.types';
 import { EditStudentButton } from './edit-student';
 
 type StudentDetail = {
@@ -25,7 +27,15 @@ type StudentDetail = {
   allergies: string | null;
   chronic_diseases: string | null;
   created_at: string | null;
+  gender?: StudentGender | null;
+  birth_date?: string | null;
 };
+
+function genderLabel(gender: StudentGender | null | undefined) {
+  if (gender === 'L') return 'Laki-laki';
+  if (gender === 'P') return 'Perempuan';
+  return null;
+}
 
 type VisitDetail = {
   id: string;
@@ -61,11 +71,26 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const { user, supabase } = await getAuthUser();
   if (!user) redirect('/auth/signin');
 
-  const { data: student } = await supabase
+  const baseColumns =
+    'id,nis,full_name,class,blood_type,allergies,chronic_diseases,created_at';
+
+  // Coba ikut ambil kolom demografi; bila migrasi 011 belum dijalankan,
+  // ulangi tanpa kolom tersebut supaya halaman tetap tampil.
+  const full = await supabase
     .from('students')
-    .select('id,nis,full_name,class,blood_type,allergies,chronic_diseases,created_at')
+    .select(`${baseColumns},gender,birth_date`)
     .eq('id', id)
     .maybeSingle();
+
+  const student = full.error
+    ? (
+        await supabase
+          .from('students')
+          .select(baseColumns)
+          .eq('id', id)
+          .maybeSingle()
+      ).data
+    : full.data;
 
   if (!student) notFound();
 
@@ -98,6 +123,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     .reduce((sum, l) => sum + (l.qty || 0), 0);
 
   const visitWhen = new Map(visits.map((v) => [v.id, v.check_in_at]));
+  const gender = genderLabel(studentDetail.gender);
+  const birthLabel = formatDateId(studentDetail.birth_date);
+  const age = ageFromBirthDate(studentDetail.birth_date);
 
   return (
     <AppShell
@@ -125,8 +153,15 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             </h2>
             <div className="muted text-sm">
               NIS {studentDetail.nis} · Kelas {studentDetail.class ?? '-'}
+              {gender ? ` · ${gender}` : ''}
               {studentDetail.blood_type ? ` · Gol. darah ${studentDetail.blood_type}` : ''}
             </div>
+            {birthLabel && (
+              <div className="muted text-xs" style={{ marginTop: 2 }}>
+                Lahir {birthLabel}
+                {age !== null ? ` · ${age} tahun` : ''}
+              </div>
+            )}
           </div>
           <span className="toolbar__spacer" />
           <Link href="/students" prefetch={false} className="btn btn--ghost btn--sm">

@@ -39,12 +39,17 @@ export type ProfileRow = {
   created_at: string | null;
 };
 
+/** L = laki-laki, P = perempuan. */
+export type StudentGender = 'L' | 'P';
+
 export type StudentRow = {
   id: string;
   school_id: string;
   nis: string;
   full_name: string;
   class: string | null;
+  gender: StudentGender | null;
+  birth_date: string | null;
   blood_type: string | null;
   allergies: string | null;
   chronic_diseases: string | null;
@@ -83,6 +88,8 @@ export type MedicineRow = {
   min_stock: number | null;
   location: string | null;
   expiry_date: string | null;
+  /** Aturan pakai, mis. "3 x 1 tablet setelah makan". */
+  dosage: string | null;
   created_at: string | null;
 };
 
@@ -203,6 +210,10 @@ export type Database = {
         Args: { p_medicine: string; p_qty: number; p_note?: string | null };
         Returns: Json;
       };
+      adjust_medicine_stock: {
+        Args: { p_medicine: string; p_new_stock: number; p_reason: string };
+        Returns: Json;
+      };
       seed_default_medicines: { Args: { p_school: string }; Returns: number };
     };
     Enums: Record<string, never>;
@@ -231,4 +242,13 @@ export type RestockResult = {
   after?: number;
   added?: number;
   error?: string;
+};
+
+/** Bentuk hasil RPC `adjust_medicine_stock`. */
+export type AdjustStockResult = {
+  ok: boolean;
+  before?: number;
+  after?: number;
+  delta?: number;
+  error?: 'invalid_stock' | 'missing_reason' | 'not_found' | 'forbidden' | string;
 };

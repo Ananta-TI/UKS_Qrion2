@@ -12,6 +12,8 @@ import { fetchAllRows } from '@/lib/supabase/paginate';
 import { downloadCsv } from '@/lib/csv';
 import { useViewMode, ViewToggle } from '@/components/ui/view-toggle';
 import { useMediaQuery } from '@/lib/use-media-query';
+import { ageFromBirthDate, formatDateId } from '@/lib/utils';
+import type { StudentGender } from '@/lib/database.types';
 import {
   Search,
   AlertCircle,
@@ -27,6 +29,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronRight as Chevron,
+  VenusAndMars,
 } from 'lucide-react';
 
 type StudentRow = {
@@ -37,6 +40,8 @@ type StudentRow = {
   blood_type: string | null;
   allergies: string | null;
   chronic_diseases: string | null;
+  gender: StudentGender | null;
+  birth_date: string | null;
 };
 
 type FormState = {
@@ -46,7 +51,16 @@ type FormState = {
   blood_type: string;
   allergies: string;
   chronic_diseases: string;
+  gender: '' | StudentGender;
+  birth_date: string;
 };
+
+/** Label jenis kelamin untuk tampilan. */
+function genderLabel(gender: StudentGender | null) {
+  if (gender === 'L') return 'Laki-laki';
+  if (gender === 'P') return 'Perempuan';
+  return null;
+}
 
 const tones = ['av--sky', 'av--teal', 'av--coral', 'av--amber', 'av--rose', 'av--plum', 'av--iris'];
 const PAGE_SIZE = 25;
@@ -66,6 +80,9 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
+  // Migrasi 011 (gender & tanggal lahir) mungkin belum dijalankan; bila kolom
+  // belum ada, halaman tetap jalan tanpa kolom demografi.
+  const [demographics, setDemographics] = useState(true);
   const { view, setView } = useViewMode('students');
   // Di layar kecil selalu pakai mode kartu; toggle-nya disembunyikan.
   const isDesktop = useMediaQuery('(min-width: 761px)');
@@ -80,6 +97,8 @@ export default function StudentsPage() {
     blood_type: '',
     allergies: '',
     chronic_diseases: '',
+    gender: '',
+    birth_date: '',
   });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -107,23 +126,40 @@ export default function StudentsPage() {
   useEffect(() => {
     let cancelled = false;
     const term = query.trim();
+    const base =
+      'id,nis,full_name,class,blood_type,allergies,chronic_diseases';
+    const withDemo = `${base},gender,birth_date`;
+
     const timer = setTimeout(async () => {
       setLoading(true);
 
-      let req = supabase
-        .from('students')
-        .select('id,nis,full_name,class,blood_type,allergies,chronic_diseases', { count: 'exact' })
-        .order('full_name', { ascending: true })
-        .order('id', { ascending: true })
-        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      const run = (columns: string) => {
+        let req = supabase
+          .from('students')
+          .select(columns, { count: 'exact' })
+          .order('full_name', { ascending: true })
+          .order('id', { ascending: true })
+          .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
 
-      if (term) {
-        req = req.or(`full_name.ilike.%${term}%,nis.ilike.%${term}%`);
+        if (term) {
+          req = req.or(`full_name.ilike.%${term}%,nis.ilike.%${term}%`);
+        }
+        return req;
+      };
+
+      let { data, count, error } = await run(withDemo);
+
+      // Kolom demografi belum ada (migrasi 011 belum dijalankan):
+      // ulangi tanpa kolom tersebut agar daftar siswa tetap tampil.
+      if (error && (error.code === '42703' || /does not exist/i.test(error.message))) {
+        const retry = await run(base);
+        data = retry.data;
+        count = retry.count;
+        if (!cancelled) setDemographics(false);
       }
 
-      const { data, count } = await req;
       if (!cancelled) {
-        setStudents((data ?? []) as StudentRow[]);
+        setStudents((data ?? []) as unknown as StudentRow[]);
         setTotal(count ?? 0);
         setLoading(false);
       }
@@ -145,6 +181,8 @@ export default function StudentsPage() {
       blood_type: s.blood_type ?? '',
       allergies: s.allergies ?? '',
       chronic_diseases: s.chronic_diseases ?? '',
+      gender: s.gender ?? '',
+      birth_date: s.birth_date ?? '',
     });
     setFormError(null);
     setOpen(true);
@@ -171,6 +209,9 @@ export default function StudentsPage() {
       blood_type: form.blood_type || null,
       allergies: form.allergies.trim(),
       chronic_diseases: form.chronic_diseases.trim(),
+      ...(demographics
+        ? { gender: form.gender || null, birth_date: form.birth_date || null }
+        : {}),
     };
 
     const { data: saved, error } = await supabase
@@ -232,10 +273,13 @@ export default function StudentsPage() {
 
   async function exportCsv() {
     setExporting(true);
+    const columns = demographics
+      ? 'id,nis,full_name,class,gender,birth_date,blood_type,allergies,chronic_diseases'
+      : 'id,nis,full_name,class,blood_type,allergies,chronic_diseases';
     const { data, error } = await fetchAllRows<StudentRow>((from, to) =>
       supabase
         .from('students')
-        .select('id,nis,full_name,class,blood_type,allergies,chronic_diseases')
+        .select(columns)
         .order('full_name', { ascending: true })
         .order('id', { ascending: true })
         .range(from, to)
@@ -248,8 +292,17 @@ export default function StudentsPage() {
     }
 
     downloadCsv(`data-siswa-${new Date().toISOString().slice(0, 10)}.csv`, [
-      ['NIS', 'Nama', 'Kelas', 'Golongan Darah', 'Alergi', 'Riwayat Penyakit'],
-      ...data.map((s) => [s.nis, s.full_name, s.class, s.blood_type, s.allergies, s.chronic_diseases]),
+      ['NIS', 'Nama', 'Kelas', 'Jenis Kelamin', 'Tanggal Lahir', 'Golongan Darah', 'Alergi', 'Riwayat Penyakit'],
+      ...data.map((s) => [
+        s.nis,
+        s.full_name,
+        s.class,
+        genderLabel(s.gender) ?? '',
+        s.birth_date ?? '',
+        s.blood_type,
+        s.allergies,
+        s.chronic_diseases,
+      ]),
     ]);
 
     await logClientActivity({
@@ -337,6 +390,19 @@ export default function StudentsPage() {
                       <Chevron className="ico muted" style={{ width: 15, height: 15 }} />
                     </div>
                     <div className="muted text-xs">NIS {s.nis} · Kelas {s.class ?? '-'}</div>
+                    {(s.gender || s.birth_date) && (
+                      <div className="muted text-xs" style={{ marginTop: 2 }}>
+                        {s.gender ? genderLabel(s.gender) : ''}
+                        {s.gender && s.birth_date ? ' · ' : ''}
+                        {s.birth_date
+                          ? `${formatDateId(s.birth_date)}${
+                              ageFromBirthDate(s.birth_date) !== null
+                                ? ` (${ageFromBirthDate(s.birth_date)} thn)`
+                                : ''
+                            }`
+                          : ''}
+                      </div>
+                    )}
                   </div>
                 </Link>
 
@@ -413,6 +479,20 @@ export default function StudentsPage() {
                   <div className="slist__meta">
                     <span>NIS {s.nis}</span>
                     <span>Kelas {s.class ?? '-'}</span>
+                    {s.gender && (
+                      <span className="tag tag--iris">
+                        <VenusAndMars className="ico" style={{ width: 12, height: 12 }} />
+                        {genderLabel(s.gender)}
+                      </span>
+                    )}
+                    {s.birth_date && (
+                      <span className="muted text-xs">
+                        {formatDateId(s.birth_date)}
+                        {ageFromBirthDate(s.birth_date) !== null
+                          ? ` · ${ageFromBirthDate(s.birth_date)} thn`
+                          : ''}
+                      </span>
+                    )}
                     {s.blood_type && <span className="tag tag--sky">{s.blood_type}</span>}
                     {s.allergies && (
                       <span className="slist__flag slist__flag--bad">
@@ -552,6 +632,36 @@ export default function StudentsPage() {
                       placeholder="7A"
                     />
                   </div>
+
+                  {demographics && (
+                    <>
+                      <div className="field">
+                        <label className="field__label" htmlFor="student-gender">Jenis kelamin</label>
+                        <select
+                          id="student-gender"
+                          value={form.gender}
+                          onChange={(e) =>
+                            setForm({ ...form, gender: e.target.value as '' | StudentGender })
+                          }
+                        >
+                          <option value="">-</option>
+                          <option value="L">Laki-laki</option>
+                          <option value="P">Perempuan</option>
+                        </select>
+                      </div>
+
+                      <div className="field">
+                        <label className="field__label" htmlFor="student-birth">Tanggal lahir</label>
+                        <input
+                          id="student-birth"
+                          type="date"
+                          value={form.birth_date}
+                          max={new Date().toISOString().slice(0, 10)}
+                          onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <div className="field">
                     <label className="field__label" htmlFor="student-blood">Golongan darah</label>

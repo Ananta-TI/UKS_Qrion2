@@ -1616,3 +1616,85 @@ textarea.input { border-radius: var(--r-ctl); height: auto; padding: 10px 14px; 
   .print-sheet { width: 100% !important; max-width: none !important; max-height: none !important; overflow: visible !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; background: #fff !important; }
   .print-sheet__noprint { display: none !important; }
 }
+
+/* ============================================================
+   Detail kunjungan, koreksi stok, batch/FIFO, impor CSV
+   ============================================================ */
+.dash__side { display: grid; gap: var(--gap); align-content: start; }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.detail-grid > div { display: grid; gap: 2px; min-width: 0; }
+.detail-grid__label {
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+.detail-grid b { font-size: var(--fs-sm); font-weight: 600; }
+.detail-block { display: grid; gap: 4px; }
+.detail-block p { font-size: var(--fs-sm); color: var(--text); }
+.detail-list { display: grid; gap: 6px; }
+.detail-list li { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
+.detail-list .ico { width: 15px; height: 15px; color: var(--primary-ink); flex: none; }
+.detail-list b { font-weight: 600; }
+.detail-list .muted { margin-left: auto; }
+
+.chip--accent[aria-pressed=true] { background: var(--primary); color: var(--on-primary); }
+.chip--accent[aria-pressed=true]:hover { background: var(--primary); filter: brightness(.96); }
+
+.medmeta { display: grid; gap: 2px; }
+.medmeta__line { color: var(--faint); font-size: var(--fs-2xs); }
+.medmeta__line b { color: var(--primary-ink); font-weight: 700; }
+
+.stocklog { display: grid; }
+.stocklog__row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
+}
+.stocklog__row:first-child { border-top: 0; }
+.stocklog__type { font-size: var(--fs-2xs); font-weight: 700; }
+.stocklog__type.is-in { color: var(--good); }
+.stocklog__type.is-out { color: var(--bad); }
+.stocklog__notes {
+  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stocklog__qty { font-variant-numeric: tabular-nums; font-weight: 700; }
+.stocklog__date { color: var(--faint); font-size: var(--fs-2xs); }
+
+.importdrop {
+  border: 1px dashed var(--line-2);
+  border-radius: 12px;
+  padding: 18px;
+  text-align: center;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  background: var(--glass-2);
+}
+.importdrop input { max-width: 100%; font-size: var(--fs-sm); }
+.importpreview { width: 100%; font-size: var(--fs-xs); }
+.importpreview th,
+.importpreview td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+.importpreview th { color: var(--faint); font-weight: 600; }
+
+@media (width <= 760px) {
+  .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

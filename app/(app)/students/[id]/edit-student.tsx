@@ -7,6 +7,7 @@ import { AlertCircle, Pencil, Save, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
 import { useToast } from '@/components/ui/toast';
+import type { StudentGender } from '@/lib/database.types';
 
 export type EditableStudent = {
   id: string;
@@ -16,6 +17,9 @@ export type EditableStudent = {
   blood_type: string | null;
   allergies: string | null;
   chronic_diseases: string | null;
+  /** Ada bila migrasi 011 sudah dijalankan. */
+  gender?: StudentGender | null;
+  birth_date?: string | null;
 };
 
 type FormState = {
@@ -25,6 +29,8 @@ type FormState = {
   blood_type: string;
   allergies: string;
   chronic_diseases: string;
+  gender: '' | StudentGender;
+  birth_date: string;
 };
 
 /** Modal dirender di body agar tidak terkurung ancestor yang punya transform. */
@@ -40,6 +46,8 @@ export function EditStudentButton({ student }: { student: EditableStudent }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Kolom demografi hanya dikirim bila memang tersedia di database.
+  const demographics = 'gender' in student;
   const [form, setForm] = useState<FormState>({
     nis: student.nis,
     full_name: student.full_name,
@@ -47,6 +55,8 @@ export function EditStudentButton({ student }: { student: EditableStudent }) {
     blood_type: student.blood_type ?? '',
     allergies: student.allergies ?? '',
     chronic_diseases: student.chronic_diseases ?? '',
+    gender: student.gender ?? '',
+    birth_date: student.birth_date ?? '',
   });
 
   function openModal() {
@@ -57,6 +67,8 @@ export function EditStudentButton({ student }: { student: EditableStudent }) {
       blood_type: student.blood_type ?? '',
       allergies: student.allergies ?? '',
       chronic_diseases: student.chronic_diseases ?? '',
+      gender: student.gender ?? '',
+      birth_date: student.birth_date ?? '',
     });
     setFormError(null);
     setOpen(true);
@@ -98,6 +110,9 @@ export function EditStudentButton({ student }: { student: EditableStudent }) {
       blood_type: form.blood_type || null,
       allergies: form.allergies.trim(),
       chronic_diseases: form.chronic_diseases.trim(),
+      ...(demographics
+        ? { gender: form.gender || null, birth_date: form.birth_date || null }
+        : {}),
     };
 
     const { data: saved, error } = await supabase
@@ -199,6 +214,36 @@ export function EditStudentButton({ student }: { student: EditableStudent }) {
                       placeholder="7A"
                     />
                   </div>
+
+                  {demographics && (
+                    <>
+                      <div className="field">
+                        <label className="field__label" htmlFor="detail-student-gender">Jenis kelamin</label>
+                        <select
+                          id="detail-student-gender"
+                          value={form.gender}
+                          onChange={(e) =>
+                            setForm({ ...form, gender: e.target.value as '' | StudentGender })
+                          }
+                        >
+                          <option value="">-</option>
+                          <option value="L">Laki-laki</option>
+                          <option value="P">Perempuan</option>
+                        </select>
+                      </div>
+
+                      <div className="field">
+                        <label className="field__label" htmlFor="detail-student-birth">Tanggal lahir</label>
+                        <input
+                          id="detail-student-birth"
+                          type="date"
+                          value={form.birth_date}
+                          max={new Date().toISOString().slice(0, 10)}
+                          onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <div className="field">
                     <label className="field__label" htmlFor="detail-student-blood">Golongan darah</label>

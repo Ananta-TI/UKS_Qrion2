@@ -35,7 +35,11 @@ type VisitRow = {
   final_status: string | null;
   chief_complaint: string | null;
   treatment: string | null;
-  students?: { full_name: string | null; nis: string | null; class: string | null } | null;
+  students?: {
+    full_name: string | null;
+    nis: string | null;
+    class: string | null;
+  } | null;
 };
 
 type MedicineRow = {
@@ -110,9 +114,22 @@ function badgeFor(action: string) {
   return 'Ubah';
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   const { user, supabase } = await getAuthUser();
   if (!user) redirect('/auth/signin');
+
+  const periods = [
+    { key: '7', label: '7 hari', days: 7 },
+    { key: '30', label: '30 hari', days: 30 },
+    { key: '90', label: '3 bulan', days: 90 },
+    { key: '365', label: '1 tahun', days: 365 },
+  ];
+  const params = await searchParams;
+  const period = periods.find((item) => item.key === (params.period ?? '')) ?? periods[1];
 
   const now = new Date();
   const todayStart = startOfDay(now);
@@ -122,7 +139,11 @@ export default async function DashboardPage() {
   const yearStart = new Date(now.getFullYear(), 0, 1);
   const since30 = new Date(todayStart);
   since30.setDate(since30.getDate() - 29);
-  const lookback = new Date(Math.min(yearStart.getTime(), since30.getTime()));
+  const periodStart = new Date(todayStart);
+  periodStart.setDate(periodStart.getDate() - (period.days - 1));
+  const lookback = new Date(
+    Math.min(yearStart.getTime(), since30.getTime(), periodStart.getTime())
+  );
 
   // Mulai query data lebih dulu, lalu ambil profil paralel dengan query tersebut.
   const dataPromise = Promise.all([
@@ -138,7 +159,7 @@ export default async function DashboardPage() {
     fetchAllRows((from, to) =>
       supabase
         .from('visits')
-        .select('id,student_id,check_in_at,final_status,students(class)')
+        .select('id,student_id,check_in_at,final_status,students(full_name,nis,class)')
         .gte('check_in_at', lookback.toISOString())
         .order('check_in_at', { ascending: false })
         .order('id', { ascending: false })
@@ -167,6 +188,10 @@ export default async function DashboardPage() {
 
   const totalStudents = students.length;
   const classCount = new Set(students.map((student) => student.class).filter(Boolean)).size;
+
+  // Kunjungan dalam periode ringkasan yang dipilih (7 hari s/d 1 tahun).
+  const periodVisits = visits.filter((visit) => new Date(visit.check_in_at) >= periodStart);
+  const uniqueStudentsPeriod = new Set(periodVisits.map((visit) => visit.student_id)).size;
 
   const monthly = Array.from({ length: 12 }, (_, month) => ({
     label: new Date(now.getFullYear(), month, 1).toLocaleDateString('id-ID', { month: 'short' }),
@@ -205,14 +230,18 @@ export default async function DashboardPage() {
     }
   });
 
-  const last30Days = visits.filter((visit) => new Date(visit.check_in_at) >= since30);
-  const uniqueStudents30 = new Set(last30Days.map((visit) => visit.student_id)).size;
-  const daily14 = Array.from({ length: 14 }, () => 0);
-  visits.forEach((visit) => {
-    const date = startOfDay(new Date(visit.check_in_at));
-    const offset = Math.round((todayStart.getTime() - date.getTime()) / 86400000);
-    if (offset >= 0 && offset < 14) daily14[13 - offset] += 1;
-  });
+  // Sparkline mengikuti periode terpilih: harian untuk <= 30 hari,
+  // bulanan untuk periode yang lebih panjang.
+  const periodSpark =
+    period.days <= 30
+      ? Array.from({ length: period.days }, (_, index) => {
+          const date = new Date(todayStart);
+          date.setDate(date.getDate() - (period.days - 1 - index));
+          const key = dayKey(date);
+          return periodVisits.filter((visit) => dayKey(new Date(visit.check_in_at)) === key)
+            .length;
+        })
+      : monthly.map((month) => month.total);
 
   const last7 = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(todayStart);
@@ -265,17 +294,17 @@ export default async function DashboardPage() {
     { label: visitStatusLabels.referred, desc: 'butuh penanganan lanjut', count: 0 },
     { label: visitStatusLabels.picked_up, desc: 'pulang bersama wali', count: 0 },
   ];
-  last30Days.forEach((visit) => {
+  periodVisits.forEach((visit) => {
     if (visit.final_status === 'back_to_class') funnel[0].count += 1;
     if (visit.final_status === 'referred') funnel[1].count += 1;
     if (visit.final_status === 'picked_up') funnel[2].count += 1;
   });
-  const funnelTotal = last30Days.length;
+  const funnelTotal = periodVisits.length;
   const funnelMax = Math.max(1, ...funnel.map((row) => row.count));
   const notReturned = funnel[1].count + funnel[2].count;
 
   const classTotals = new Map<string, { visits: number; students: Set<string> }>();
-  last30Days.forEach((visit) => {
+  periodVisits.forEach((visit) => {
     const klass = visit.students?.class?.trim() || 'Tanpa kelas';
     const current = classTotals.get(klass) ?? { visits: 0, students: new Set<string>() };
     current.visits += 1;
@@ -287,6 +316,28 @@ export default async function DashboardPage() {
     .sort((a, b) => b.visits - a.visits)
     .slice(0, 4);
   const maxClassVisits = Math.max(1, ...topClasses.map((item) => item.visits));
+
+  // Siswa yang paling sering datang pada periode terpilih: berguna untuk
+  // melihat kasus berulang, bukan sekadar angka kunjungan.
+  const studentTotals = new Map<
+    string,
+    { name: string; nis: string | null; klass: string | null; visits: number }
+  >();
+  periodVisits.forEach((visit) => {
+    const current = studentTotals.get(visit.student_id) ?? {
+      name: visit.students?.full_name ?? 'Siswa',
+      nis: visit.students?.nis ?? null,
+      klass: visit.students?.class ?? null,
+      visits: 0,
+    };
+    current.visits += 1;
+    studentTotals.set(visit.student_id, current);
+  });
+  const topStudents = [...studentTotals.entries()]
+    .map(([id, value]) => ({ id, ...value }))
+    .sort((a, b) => b.visits - a.visits || a.name.localeCompare(b.name))
+    .slice(0, 5);
+  const maxStudentVisits = Math.max(1, ...topStudents.map((item) => item.visits));
 
   const timeline = [...todayVisits]
     .sort((a, b) => new Date(a.check_in_at).getTime() - new Date(b.check_in_at).getTime())
@@ -327,6 +378,26 @@ export default async function DashboardPage() {
       }
     >
       <div className="dash">
+        <div className="toolbar" style={{ marginBottom: 0 }}>
+          <div className="chips" role="group" aria-label="Periode ringkasan">
+            {periods.map((item) => (
+              <Link
+                key={item.key}
+                href={item.key === '30' ? '/' : `/?period=${item.key}`}
+                prefetch={false}
+                className="chip chip--accent"
+                aria-pressed={period.key === item.key}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+          <span className="toolbar__spacer" />
+          <span className="muted text-xs">
+            Ringkasan {period.label} terakhir · {periodVisits.length} kunjungan
+          </span>
+        </div>
+
         <div className="dash__heroRow">
           <section className="card dash-hero">
             <div className="dash-hero__top">
@@ -495,11 +566,11 @@ export default async function DashboardPage() {
             </div>
             <div className="dash-kpi__row">
               <div className="dash-kpi__value">
-                <CountUp value={uniqueStudents30} />
+                <CountUp value={uniqueStudentsPeriod} />
               </div>
-              <Sparkline values={daily14} tone="on-accent" />
+              <Sparkline values={periodSpark} tone="on-accent" />
             </div>
-            <div className="dash-kpi__foot">30 hari terakhir · {last30Days.length} kunjungan</div>
+            <div className="dash-kpi__foot">{period.label} terakhir · {periodVisits.length} kunjungan</div>
           </div>
 
           <div className="dash-kpi">
@@ -546,13 +617,14 @@ export default async function DashboardPage() {
         <div className="dash__split dash__split--main">
           <YearChart points={monthly} />
 
+          <div className="dash__side">
           <section className="card dash-funnel">
             <div className="card__head">
               <div className="card__title">
                 <CheckCircle2 className="ico" />
                 <span>
                   Status akhir
-                  <span className="card__sub">Hasil penanganan 30 hari terakhir.</span>
+                  <span className="card__sub">Hasil penanganan {period.label} terakhir.</span>
                 </span>
               </div>
               <span className="spill spill--iris">
@@ -592,10 +664,57 @@ export default async function DashboardPage() {
               <span>
                 {funnelTotal
                   ? `${notReturned} kunjungan tidak kembali ke kelas.`
-                  : 'Belum ada kunjungan pada 30 hari terakhir.'}
+                  : `Belum ada kunjungan pada ${period.label} terakhir.`}
               </span>
             </div>
           </section>
+
+          <section className="card dash-rank">
+            <div className="card__head">
+              <div className="card__title">
+                <Users className="ico" />
+                <span>
+                  Siswa paling sering
+                  <span className="card__sub">{period.label} terakhir.</span>
+                </span>
+              </div>
+            </div>
+
+            {topStudents.length === 0 ? (
+              <div className="empty">
+                <Users className="ico" />
+                <div className="empty__title">Belum ada kunjungan</div>
+                <div className="empty__text">
+                  Siswa dengan kunjungan terbanyak akan muncul di sini.
+                </div>
+              </div>
+            ) : (
+              <div className="dash-rank__list">
+                {topStudents.map((item, index) => (
+                  <div className="dash-rank__row" key={item.id}>
+                    <span className="dash-rank__rank">{index + 1}</span>
+                    <div className="dash-rank__main">
+                      <b>{item.name}</b>
+                      <small>
+                        {item.klass ? `Kelas ${item.klass}` : 'Tanpa kelas'}
+                        {item.nis ? ` · ${item.nis}` : ''}
+                      </small>
+                      <span className="dash-rank__bar">
+                        <i style={{ width: `${(item.visits / maxStudentVisits) * 100}%` }} />
+                      </span>
+                    </div>
+                    <span className="dash-rank__val">{item.visits}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="dash-rank__foot">
+              <span>{uniqueStudentsPeriod} siswa datang</span>
+              <span>{periodVisits.length} kunjungan</span>
+            </div>
+          </section>
+          </div>
         </div>
 
         <div className="dash__split dash__split--lists">
@@ -823,7 +942,7 @@ export default async function DashboardPage() {
                 <Users className="ico" />
                 <span>
                   Kelas paling sering
-                  <span className="card__sub">30 hari terakhir.</span>
+                  <span className="card__sub">{period.label} terakhir.</span>
                 </span>
               </div>
             </div>
@@ -832,7 +951,7 @@ export default async function DashboardPage() {
               <div className="empty">
                 <Users className="ico" />
                 <div className="empty__title">Belum ada kunjungan</div>
-                <div className="empty__text">Kunjungan 30 hari terakhir akan dirangkum per kelas di sini.</div>
+                <div className="empty__text">Kunjungan {period.label} terakhir akan dirangkum per kelas di sini.</div>
               </div>
             ) : (
               <div className="dash-rank__list">
@@ -854,7 +973,7 @@ export default async function DashboardPage() {
 
             <div className="dash-rank__foot">
               <span>{classCount} kelas terdaftar</span>
-              <span>{last30Days.length} kunjungan 30 hari</span>
+              <span>{periodVisits.length} kunjungan {period.label}</span>
             </div>
           </section>
         </div>

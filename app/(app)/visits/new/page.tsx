@@ -7,7 +7,8 @@ import { useSearchParams } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
 import { AppShell } from '@/components/layout/app-shell';
 import { visitStatusLabels } from '@/lib/visit-status';
-import type { DispenseResult, MedicineRow, StudentRow } from '@/lib/database.types';
+import type { DispenseResult, MedicineBatchRow, MedicineRow, StudentRow } from '@/lib/database.types';
+import { ageFromBirthDate } from '@/lib/utils';
 import {
   Search,
   UserRound,
@@ -70,9 +71,17 @@ function VisitForm() {
 
   // Obat yang diberikan pada kunjungan ini, dipilih dari inventaris.
   const [medicines, setMedicines] = useState<MedicineRow[]>([]);
+  const [batches, setBatches] = useState<MedicineBatchRow[]>([]);
   const [medQuery, setMedQuery] = useState('');
   const [selectedMeds, setSelectedMeds] = useState<
-    { id: string; name: string; unit: string | null; qty: number; stock: number }[]
+    {
+      id: string;
+      name: string;
+      unit: string | null;
+      dosage: string | null;
+      qty: number;
+      stock: number;
+    }[]
   >([]);
 
   // Saran keluhan utama: diambil dari riwayat kunjungan sekolah ini,
@@ -121,8 +130,37 @@ function VisitForm() {
         .order('name', { ascending: true });
       setMedicines(data ?? []);
     })();
+
+    // Batch dipakai untuk menampilkan sisa per kedaluwarsa (FIFO) sebelum
+    // obat diberikan, supaya petugas UKS tahu mana yang harus dipakai dulu.
+    (async () => {
+      const { data } = await supabase
+        .from('medicine_batches')
+        .select('*')
+        .gt('qty', 0)
+        .order('expiry_date', { ascending: true, nullsFirst: false });
+      setBatches((data ?? []) as MedicineBatchRow[]);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Ringkasan batch terdekat kedaluwarsa untuk satu obat. */
+  function fifoOf(id: string) {
+    const list = batches.filter((b) => b.medicine_id === id && (b.qty ?? 0) > 0);
+    if (list.length === 0) return null;
+    const first = list[0];
+    return {
+      qty: first.qty ?? 0,
+      expiry: first.expiry_date
+        ? new Date(first.expiry_date).toLocaleDateString('id-ID', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          })
+        : null,
+      more: list.length - 1,
+    };
+  }
 
   const medResults = medQuery.trim()
     ? medicines
@@ -143,7 +181,14 @@ function VisitForm() {
       if (existing) {
         return prev.map((p) => (p.id === m.id ? { ...p, qty: p.qty + 1 } : p));
       }
-      return [...prev, { id: m.id, name: m.name, unit: m.unit ?? null, qty: 1, stock: m.stock ?? 0 }];
+      return [...prev, {
+        id: m.id,
+        name: m.name,
+        unit: m.unit ?? null,
+        dosage: m.dosage ?? null,
+        qty: 1,
+        stock: m.stock ?? 0,
+      }];
     });
     setMedQuery('');
   }
@@ -409,6 +454,23 @@ function VisitForm() {
                 <div className="min-w-0">
                   <div className="font-semibold" style={{ fontSize: 'var(--fs-lg)' }}>{student.full_name}</div>
                   <div className="muted text-xs">NIS {student.nis} · Kelas {student.class}</div>
+                  {(student.gender || student.birth_date) && (
+                    <div className="muted text-xs" style={{ marginTop: 2 }}>
+                      {student.gender === 'L'
+                        ? 'Laki-laki'
+                        : student.gender === 'P'
+                          ? 'Perempuan'
+                          : ''}
+                      {student.gender && student.birth_date ? ' · ' : ''}
+                      {student.birth_date
+                        ? `${
+                            ageFromBirthDate(student.birth_date) !== null
+                              ? `${ageFromBirthDate(student.birth_date)} tahun`
+                              : ''
+                          }`
+                        : ''}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="grid gap-2">
@@ -582,25 +644,41 @@ function VisitForm() {
                       <div className="medpick__empty">Obat tidak ditemukan di inventaris.</div>
                     ) : (
                       <div className="medpick__list">
-                        {medResults.map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => addMed(m)}
-                            className="medpick__opt"
-                          >
-                            <span className="av av--sm av--teal">
-                              <Pill className="ico" />
-                            </span>
-                            <div className="grow">
-                              <b>{m.name}</b>
-                              <small>
-                                {m.category || 'Tanpa kategori'} · stok {m.stock ?? 0} {m.unit ?? ''}
-                              </small>
-                            </div>
-                            <Plus className="ico muted" />
-                          </button>
-                        ))}
+                        {medResults.map((m) => {
+                          const fifo = fifoOf(m.id);
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => addMed(m)}
+                              className="medpick__opt"
+                            >
+                              <span className="av av--sm av--teal">
+                                <Pill className="ico" />
+                              </span>
+                              <div className="grow">
+                                <b>{m.name}</b>
+                                <div className="medmeta">
+                                  <span className="medmeta__line">
+                                    {m.category || 'Tanpa kategori'} · stok <b>{m.stock ?? 0}</b>{' '}
+                                    {m.unit ?? ''}
+                                  </span>
+                                  {m.dosage && (
+                                    <span className="medmeta__line">Dosis: {m.dosage}</span>
+                                  )}
+                                  <span className="medmeta__line">
+                                    {fifo
+                                      ? `Batch terdekat: ${fifo.qty} ${m.unit ?? ''}${
+                                          fifo.expiry ? ` s.d. ${fifo.expiry}` : ''
+                                        }${fifo.more > 0 ? ` · +${fifo.more} batch` : ''}`
+                                      : 'Belum ada batch tercatat'}
+                                  </span>
+                                </div>
+                              </div>
+                              <Plus className="ico muted" />
+                            </button>
+                          );
+                        })}
                       </div>
                     ))}
 
@@ -608,47 +686,61 @@ function VisitForm() {
                     <>
                       <div className="medpick__selhead">Obat dipilih</div>
                       <div className="medpick__sel">
-                        {selectedMeds.map((s) => (
-                          <div key={s.id} className="medpick__selrow">
-                            <span className="av av--sm av--amber">
-                              <Pill className="ico" />
-                            </span>
-                            <div className="grow">
-                              <b>{s.name}</b>
-                              <small>
-                                stok tersedia {s.stock} {s.unit ?? ''}
-                              </small>
+                        {selectedMeds.map((s) => {
+                          const fifo = fifoOf(s.id);
+                          return (
+                            <div key={s.id} className="medpick__selrow">
+                              <span className="av av--sm av--amber">
+                                <Pill className="ico" />
+                              </span>
+                              <div className="grow">
+                                <b>{s.name}</b>
+                                <div className="medmeta">
+                                  <span className="medmeta__line">
+                                    Stok tersedia <b>{s.stock}</b> {s.unit ?? ''}
+                                  </span>
+                                  {s.dosage && (
+                                    <span className="medmeta__line">Dosis: {s.dosage}</span>
+                                  )}
+                                  {fifo && (
+                                    <span className="medmeta__line">
+                                      Pakai dulu {fifo.qty} {s.unit ?? ''}
+                                      {fifo.expiry ? ` (exp ${fifo.expiry})` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="medpick__qty">
+                                <button
+                                  type="button"
+                                  className="ibtn"
+                                  onClick={() => changeQty(s.id, Math.max(1, s.qty - 1))}
+                                  aria-label={`Kurangi ${s.name}`}
+                                >
+                                  <Minus className="ico" />
+                                </button>
+                                <b>{s.qty}</b>
+                                <button
+                                  type="button"
+                                  className="ibtn"
+                                  onClick={() => changeQty(s.id, Math.min(s.stock || s.qty, s.qty + 1))}
+                                  aria-label={`Tambah ${s.name}`}
+                                >
+                                  <Plus className="ico" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ibtn"
+                                  onClick={() => removeMed(s.id)}
+                                  aria-label={`Hapus ${s.name}`}
+                                  style={{ color: 'var(--bad)' }}
+                                >
+                                  <X className="ico" />
+                                </button>
+                              </div>
                             </div>
-                            <div className="medpick__qty">
-                              <button
-                                type="button"
-                                className="ibtn"
-                                onClick={() => changeQty(s.id, Math.max(1, s.qty - 1))}
-                                aria-label={`Kurangi ${s.name}`}
-                              >
-                                <Minus className="ico" />
-                              </button>
-                              <b>{s.qty}</b>
-                              <button
-                                type="button"
-                                className="ibtn"
-                                onClick={() => changeQty(s.id, Math.min(s.stock || s.qty, s.qty + 1))}
-                                aria-label={`Tambah ${s.name}`}
-                              >
-                                <Plus className="ico" />
-                              </button>
-                              <button
-                                type="button"
-                                className="ibtn"
-                                onClick={() => removeMed(s.id)}
-                                aria-label={`Hapus ${s.name}`}
-                                style={{ color: 'var(--bad)' }}
-                              >
-                                <X className="ico" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </>
                   )}

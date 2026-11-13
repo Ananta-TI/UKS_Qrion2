@@ -8,6 +8,7 @@ export type ClientActivityAction =
   | 'delete'
   | 'restock'
   | 'stock_out'
+  | 'adjust'
   | 'export';
 
 type ClientActivityInput = {

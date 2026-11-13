@@ -10,6 +10,7 @@ const allowed = new Set<ActivityAction>([
   'delete',
   'restock',
   'stock_out',
+  'adjust',
   'export',
 ]);
 

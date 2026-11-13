@@ -29,6 +29,7 @@ const actionMeta: Record<string, { label: string; cls: string }> = {
   delete: { label: 'Hapus', cls: 'badge badge--bad' },
   restock: { label: 'Restok', cls: 'badge badge--warn' },
   stock_out: { label: 'Stok keluar', cls: 'badge badge--warn' },
+  adjust: { label: 'Koreksi stok', cls: 'badge badge--warn' },
   login: { label: 'Masuk', cls: 'badge badge--plain' },
   logout: { label: 'Keluar', cls: 'badge badge--plain' },
   export: { label: 'Ekspor', cls: 'badge badge--good' },
@@ -40,7 +41,7 @@ const filters: { key: string; label: string; actions: string[] }[] = [
   { key: 'create', label: 'Tambah', actions: ['create'] },
   { key: 'update', label: 'Ubah', actions: ['update'] },
   { key: 'delete', label: 'Hapus', actions: ['delete'] },
-  { key: 'stock', label: 'Stok', actions: ['restock', 'stock_out'] },
+  { key: 'stock', label: 'Stok', actions: ['restock', 'stock_out', 'adjust'] },
   { key: 'session', label: 'Sesi', actions: ['login', 'logout'] },
   { key: 'export', label: 'Ekspor', actions: ['export'] },
 ];
