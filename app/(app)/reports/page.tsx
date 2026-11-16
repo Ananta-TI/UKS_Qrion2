@@ -6,6 +6,7 @@ import { LayoutGroup, motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
+import { Sparkline } from '@/components/dashboard/spark';
 import {
   AlertCircle,
   Ambulance,
@@ -22,14 +23,12 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import type { ChartConfig } from '@/components/evilcharts/charts/echarts-area-chart';
-import { useChartColors } from '@/components/charts/use-chart-colors';
 import { fetchAllRows } from '@/lib/supabase/paginate';
 import { visitStatusLabel, visitStatusLabels } from '@/lib/visit-status';
 import { exportReportsExcel } from '@/lib/reports/export-excel';
 import { useToast } from '@/components/ui/toast';
 
-// ECharts dan jsPDF tidak ikut bundle awal halaman Laporan.
+// Grafik Bklit dimuat terpisah agar tidak memperbesar bundle awal halaman Laporan.
 const ReportAreaChart = dynamic(() => import('@/components/charts/report-area-chart'), {
   ssr: false,
   loading: () => <div className="skel" style={{ height: 260, width: '100%' }} />,
@@ -39,6 +38,19 @@ const MedicineMoveChart = dynamic(() => import('@/components/charts/medicine-mov
   ssr: false,
   loading: () => <div className="skel" style={{ height: 260, width: '100%' }} />,
 });
+
+const ReportBarsChart = dynamic(() => import('@/components/charts/report-bars-chart'), {
+  ssr: false,
+  loading: () => <div className="skel" style={{ height: 230, width: '100%' }} />,
+});
+
+const BklitGauge = dynamic(
+  () => import('@/components/charts/gauge').then((module) => module.Gauge),
+  {
+    ssr: false,
+    loading: () => <div className="skel" style={{ height: 170, width: '100%' }} />,
+  }
+);
 
 const pillSpring = { type: 'spring', stiffness: 380, damping: 32, mass: 0.7 } as const;
 
@@ -225,6 +237,69 @@ function buildDailyTrend(visits: VisitRow[], days: number): GroupDatum[] {
   return [...buckets.values()];
 }
 
+type KpiBucket = {
+  total: number;
+  students: Set<string>;
+  referred: number;
+  returned: number;
+};
+
+function createKpiBucket(): KpiBucket {
+  return { total: 0, students: new Set<string>(), referred: 0, returned: 0 };
+}
+
+/**
+ * Deret kecil untuk sparkline KPI laporan. Harian untuk 7/30 hari, bulanan
+ * untuk periode lebih panjang supaya bentuk tren tetap terbaca.
+ */
+function buildKpiTrend(visits: VisitRow[], range: RangeKey, days: number) {
+  const daily = range === '7d' || range === '30d';
+  const buckets = new Map<string, KpiBucket>();
+
+  if (daily) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = days - 1; i >= 0; i -= 1) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - i);
+      buckets.set(dayKey(date.toISOString()), createKpiBucket());
+    }
+  } else if (days > 0) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (days - 1));
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    const end = new Date();
+    while (cursor <= end) {
+      buckets.set(monthKey(cursor.toISOString()), createKpiBucket());
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+
+  for (const visit of visits) {
+    const key = daily ? dayKey(visit.check_in_at) : monthKey(visit.check_in_at);
+    const bucket = buckets.get(key) ?? createKpiBucket();
+    bucket.total += 1;
+    if (visit.student_id) bucket.students.add(visit.student_id);
+    if (visit.final_status === 'referred') bucket.referred += 1;
+    if (visit.final_status === 'back_to_class') bucket.returned += 1;
+    buckets.set(key, bucket);
+  }
+
+  const rows = [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, bucket]) => bucket);
+
+  return {
+    total: rows.map((bucket) => bucket.total),
+    students: rows.map((bucket) => bucket.students.size),
+    referred: rows.map((bucket) => bucket.referred),
+    returnRate: rows.map((bucket) =>
+      bucket.total ? Math.round((bucket.returned / bucket.total) * 100) : 0
+    ),
+  };
+}
+
 function buildGroups(visits: VisitRow[], groupBy: GroupBy, metric: Metric): GroupDatum[] {
   const buckets = new Map<string, { label: string; count: number; students: Set<string> }>();
 
@@ -274,8 +349,6 @@ function buildGroups(visits: VisitRow[], groupBy: GroupBy, metric: Metric): Grou
 }
 
 function AreaChart({ data }: { data: GroupDatum[] }) {
-  const accent = useChartColors();
-
   if (data.length < 2) {
     return (
       <div className="empty" style={{ padding: '32px 8px' }}>
@@ -292,101 +365,36 @@ function AreaChart({ data }: { data: GroupDatum[] }) {
 
   const chartKey = data.map((d) => `${d.key}:${d.value}`).join('|');
 
-  const chartConfig: ChartConfig = {
-    value: {
-      label: 'Jumlah',
-      colors: {
-        light: [accent.primary, accent.secondary],
-        dark: [accent.primary, accent.secondary],
-      },
-    },
-  };
-
   return (
     <div key={chartKey} className="relative w-full" style={{ minHeight: 240, height: 260 }}>
       <ReportAreaChart
         key={chartKey}
         data={chartData}
-        config={chartConfig}
         xDataKey="label"
         className="h-full w-full"
-        curveType="monotone"
-        chartOptions={{
-          grid: {
-            left: 36,
-            right: 18,
-            top: 20,
-            bottom: 26,
-          },
-          yAxis: {
-            type: 'value',
-            min: 0,
-            splitNumber: 3,
-          },
-        }}
       />
     </div>
   );
 }
 
 function BarsChart({ data }: { data: GroupDatum[] }) {
-  const max = Math.max(1, ...data.map((d) => d.value));
-  const total = data.reduce((sum, d) => sum + d.value, 0);
-  const signature = data.map((d) => `${d.key}:${d.value}`).join('|');
-
-  return (
-    <div key={signature} className="rpt__bars">
-      {data.map((d, i) => (
-        <div key={d.key} className="rpt__brow" title={`${d.label}: ${d.value}`}>
-          <span className="rpt__blabel">{d.label}</span>
-          <span className="rpt__btrack">
-            <span
-              className="rpt__bfill"
-              style={{
-                width: `${Math.max((d.value / max) * 100, 1)}%`,
-                animationDelay: `${i * 55}ms`,
-              }}
-            />
-          </span>
-          <span className="rpt__bval">
-            <CountUp value={d.value} />
-            <small>
-              <CountUp value={total ? (d.value / total) * 100 : 0} decimals={0} suffix="%" />
-            </small>
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+  return <ReportBarsChart data={data} />;
 }
 
 function Gauge({ pct }: { pct: number }) {
-  const r = 64;
-  const cx = 90;
-  const cy = 92;
-  const d = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
-
   return (
-    <div className="rpt__gaugewrap">
-      <svg viewBox="0 0 180 112" className="rpt__gauge" role="img" aria-label={`${pct}% kembali ke kelas`}>
-        <path d={d} fill="none" stroke="var(--well)" strokeWidth="14" strokeLinecap="round" />
-        <motion.path
-          key={pct}
-          d={d}
-          fill="none"
-          stroke="var(--chart)"
-          strokeWidth="14"
-          strokeLinecap="round"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: Math.min(pct, 100) / 100 }}
-          transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-        />
-      </svg>
-      <div className="rpt__gaugeoverlay" aria-hidden="true">
-        <CountUp className="rpt__gaugeval" value={pct} suffix="%" />
-        <span>kembali ke kelas</span>
-      </div>
-    </div>
+    <BklitGauge
+      value={pct}
+      centerValue={pct}
+      suffix="%"
+      defaultLabel="kembali ke kelas"
+      totalNotches={40}
+      activeFill="var(--iris)"
+      inactiveFill="var(--well)"
+      inactiveFillOpacity={0.7}
+      minWidth={0}
+      className="rpt__gaugewrap"
+    />
   );
 }
 
@@ -512,6 +520,7 @@ export default function ReportsPage() {
   const returnRate = total ? Math.round((returned / total) * 100) : 0;
   const referred = statusCounts['referred'] ?? 0;
   const referralRate = total ? Math.round((referred / total) * 100) : 0;
+  const kpiTrend = buildKpiTrend(filtered, range, rangeInfo.days);
 
   const monthly = buildGroups(filtered, 'month', 'visits');
   const trend = range === '7d' ? buildDailyTrend(filtered, 7) : monthly;
@@ -603,11 +612,6 @@ export default function ReportsPage() {
       .slice(0, 8);
   })();
   const medMaxOut = Math.max(1, ...medRanking.map((r) => r.keluar));
-
-  const medMoveConfig: ChartConfig = {
-    masuk: { label: 'Masuk' },
-    keluar: { label: 'Keluar' },
-  };
 
   const metricInfo = metrics.find((m) => m.key === metric) ?? metrics[0];
   const groupInfo = groupOptions.find((g) => g.key === groupBy) ?? groupOptions[0];
@@ -980,7 +984,10 @@ export default function ReportsPage() {
               <div className="rpt__kpi-label">
                 <ClipboardList className="ico" /> Total kunjungan
               </div>
-              <div className="rpt__kpi-value"><CountUp value={total} /></div>
+              <div className="rpt__kpi-row">
+                <div className="rpt__kpi-value"><CountUp value={total} /></div>
+                <Sparkline values={kpiTrend.total} tone="on-ink" />
+              </div>
               <div className="rpt__kpi-foot">{rangeInfo.label} terakhir</div>
             </div>
 
@@ -988,7 +995,10 @@ export default function ReportsPage() {
               <div className="rpt__kpi-label">
                 <Users className="ico" /> Siswa dilayani
               </div>
-              <div className="rpt__kpi-value"><CountUp value={uniqueStudents} /></div>
+              <div className="rpt__kpi-row">
+                <div className="rpt__kpi-value"><CountUp value={uniqueStudents} /></div>
+                <Sparkline values={kpiTrend.students} tone="on-accent" />
+              </div>
               <div className="rpt__kpi-foot">siswa berbeda</div>
             </div>
 
@@ -996,7 +1006,10 @@ export default function ReportsPage() {
               <div className="rpt__kpi-label">
                 <Ambulance className="ico" /> Dirujuk
               </div>
-              <div className="rpt__kpi-value"><CountUp value={referred} /></div>
+              <div className="rpt__kpi-row">
+                <div className="rpt__kpi-value"><CountUp value={referred} /></div>
+                <Sparkline values={kpiTrend.referred} tone="bad" />
+              </div>
               <div className="rpt__kpi-foot">
                 <CountUp value={referralRate} suffix="%" /> dari <CountUp value={total} /> kunjungan · butuh penanganan lanjut
               </div>
@@ -1006,7 +1019,10 @@ export default function ReportsPage() {
               <div className="rpt__kpi-label">
                 <CheckCircle2 className="ico" /> Kembali ke kelas
               </div>
-              <div className="rpt__kpi-value"><CountUp value={returnRate} suffix="%" /></div>
+              <div className="rpt__kpi-row">
+                <div className="rpt__kpi-value"><CountUp value={returnRate} suffix="%" /></div>
+                <Sparkline values={kpiTrend.returnRate} />
+              </div>
               <div className="rpt__kpi-foot"><CountUp value={returned} /> dari <CountUp value={total} /> kunjungan</div>
             </div>
           </section>
@@ -1139,7 +1155,7 @@ export default function ReportsPage() {
                   <div className="empty__text">Belum ada pergerakan stok obat pada periode ini.</div>
                 </div>
               ) : (
-                <MedicineMoveChart data={medMovement} config={medMoveConfig} />
+                <MedicineMoveChart data={medMovement} />
               )}
             </div>
 

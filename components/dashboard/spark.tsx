@@ -1,46 +1,36 @@
+'use client';
+
+import { LineSparkline } from '@/components/charts/sparkline';
+
 type SparklineProps = {
   values: number[];
   tone?: string;
   className?: string;
 };
 
-function points(values: number[], width = 100, height = 32, pad = 3.5) {
-  const series = values.length > 1 ? values : [values[0] ?? 0, values[0] ?? 0];
-  const max = Math.max(...series);
-  const min = Math.min(...series);
-  const span = max - min || 1;
-  const step = (width - pad * 2) / (series.length - 1);
-
-  return series
-    .map((value, index) => {
-      const x = pad + step * index;
-      const y = height - pad - ((value - min) / span) * (height - pad * 2);
-      return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(' ');
-}
-
+/**
+ * Sparkline tipis untuk kartu KPI. Memakai LineSparkline dari Bklit UI agar
+ * animasi dan bentuk kurvanya konsisten dengan grafik utama. Interaktif
+ * supaya crosshair, dot, dan highlight muncul saat hover seperti di docs.
+ */
 export function Sparkline({ values, tone = 'chart', className }: SparklineProps) {
-  const path = points(values);
+  const series = values.length > 1 ? values : [values[0] ?? 0, values[0] ?? 0];
+  const data = series.map((value, index) => ({ index, value }));
+  const color = `var(--${tone})`;
 
   return (
-    <svg
-      className={`dash-spark ${className ?? ''}`}
-      viewBox="0 0 100 32"
-      preserveAspectRatio="none"
-      aria-hidden="true"
-    >
-      <path
-        className="dash-spark__line"
-        d={path}
-        fill="none"
-        stroke={`var(--${tone})`}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        pathLength={1}
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
+    <LineSparkline
+      data={data}
+      dataKey="value"
+      width={82}
+      height={34}
+      padding={4}
+      color={color}
+      strokeWidth={2}
+      interactive
+      className={className}
+      style={{ flex: 'none' }}
+      aria-label="Ringkasan tren"
+    />
   );
 }

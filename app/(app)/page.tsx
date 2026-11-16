@@ -22,6 +22,7 @@ import {
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import { Sparkline } from '@/components/dashboard/spark';
+import { WeekSpark } from '@/components/dashboard/week-spark';
 import { YearChart } from '@/components/dashboard/year-chart';
 import { getAuthUser, getSessionProfile } from '@/lib/auth';
 import { fetchAllRows } from '@/lib/supabase/paginate';
@@ -271,8 +272,6 @@ export default async function DashboardPage({
       : todayCount > 0
         ? 100
         : 0;
-  const maxDay = Math.max(1, ...last7.map((day) => day.total));
-
   const todayStatus = { back_to_class: 0, referred: 0, picked_up: 0, unknown: 0 };
   todayVisits.forEach((visit) => {
     const key = (visit.final_status ?? 'unknown') as keyof typeof todayStatus;
@@ -502,27 +501,7 @@ export default async function DashboardPage({
               <small>dibanding kemarin</small>
             </div>
 
-            <div className="dash-bars" aria-hidden="true">
-              {last7.map((day) => (
-                <div className="dash-bars__col" key={day.key}>
-                  <span className="dash-bars__track">
-                    <span
-                      className="dash-bars__bar"
-                      style={{ height: `${Math.max(5, (day.total / maxDay) * 100)}%` }}
-                    >
-                      {day.referred > 0 && (
-                        <i
-                          style={{
-                            height: `${Math.round((day.referred / Math.max(1, day.total)) * 100)}%`,
-                          }}
-                        />
-                      )}
-                    </span>
-                  </span>
-                  <span className="dash-bars__lab">{day.label}</span>
-                </div>
-              ))}
-            </div>
+            <WeekSpark points={last7} />
 
             <div className="dash-today__foot">
               <div className="legend">

@@ -50,6 +50,10 @@ module.exports = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        'chart-label': 'var(--chart-label)',
+        'chart-tooltip-background': 'var(--chart-tooltip-background)',
+        'chart-tooltip-foreground': 'var(--chart-tooltip-foreground)',
+        'chart-tooltip-muted': 'var(--chart-tooltip-muted)',
       },
       borderRadius: {
         lg: 'var(--radius)',
