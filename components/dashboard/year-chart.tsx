@@ -60,6 +60,16 @@ export function YearChart({ points }: { points: YearPoint[] }) {
 
   const totalYear = chartData.reduce((sum, point) => sum + point.primary, 0);
   const nowMonthIndex = Math.min(new Date().getMonth(), months.length - 1);
+  const monthsElapsed = nowMonthIndex + 1;
+  const averagePerMonth = monthsElapsed ? Math.round(totalYear / monthsElapsed) : 0;
+  const busiestIndex = chartData.reduce(
+    (best, point, index) => (point.primary > chartData[best].primary ? index : best),
+    0
+  );
+  const busiest = totalYear > 0 ? chartData[busiestIndex] : null;
+  const primaryUnit = series === 'total' ? 'kunjungan' : 'kembali';
+  const visitsYear = months.reduce((sum, month) => sum + month.total, 0);
+  const referredYear = chartData.reduce((sum, point) => sum + point.referred, 0);
 
   return (
     <section className="card chartc year-chart">
@@ -186,6 +196,33 @@ export function YearChart({ points }: { points: YearPoint[] }) {
           {formatCount(chartData[nowMonthIndex].primary)}{' '}
           {series === 'total' ? 'kunjungan' : 'kembali ke kelas'})
         </span>
+      </div>
+
+      <div className="year-chart__stats">
+        <div className="year-chart__stat">
+          <small>{series === 'total' ? 'Total kunjungan' : 'Total kembali'}</small>
+          <b>{formatCount(totalYear)}</b>
+          <span>tahun {year}</span>
+        </div>
+        <div className="year-chart__stat">
+          <small>Rata-rata/bulan</small>
+          <b>{formatCount(averagePerMonth)}</b>
+          <span>s.d. {months[nowMonthIndex].label}</span>
+        </div>
+        <div className="year-chart__stat">
+          <small>Bulan tersibuk</small>
+          <b>{busiest ? months[busiestIndex].label : '—'}</b>
+          <span>
+            {busiest
+              ? `${formatCount(busiest.primary)} ${primaryUnit}`
+              : 'Belum ada data'}
+          </span>
+        </div>
+        <div className="year-chart__stat">
+          <small>Rujukan tahun ini</small>
+          <b>{formatCount(referredYear)}</b>
+          <span>dari {formatCount(visitsYear)} kunjungan</span>
+        </div>
       </div>
 
       <span className="sr-only">Total setahun: {formatCount(totalYear)}</span>
