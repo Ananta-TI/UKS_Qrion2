@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { CommandPalette } from '@/components/layout/command-palette';
+import { CardScanner } from '@/components/layout/card-scanner';
 import { SettingsRail } from '@/components/layout/settings-rail';
 import { StickyHeadObserver } from '@/components/layout/sticky-head-observer';
 import { HeaderContext, PageHeader, type HeaderSpec } from '@/components/layout/page-header';
@@ -142,6 +143,7 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
 
   return (
     <>
+      <CardScanner />
       <div className="mesh" aria-hidden="true">
         <i className="mesh__a" />
         <i className="mesh__b" />

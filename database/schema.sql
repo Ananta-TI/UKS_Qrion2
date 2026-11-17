@@ -16,6 +16,7 @@ create table students (
   nis text unique not null,
   full_name text not null,
   class text,
+  card_code text,
   blood_type text,
   allergies text default '',
   chronic_diseases text default '',

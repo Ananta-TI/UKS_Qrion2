@@ -203,13 +203,44 @@ function VisitForm() {
 
   useEffect(() => {
     const id = searchParams.get('student');
-    if (!id) return;
+    const card = searchParams.get('card')?.trim();
+    if (!id && !card) return;
     (async () => {
-      const { data } = await supabase.from('students').select('*').eq('id', id).maybeSingle();
-      if (data) {
-        setStudent(data);
-        setQuery(data.full_name);
+      if (id) {
+        const { data } = await supabase.from('students').select('*').eq('id', id).maybeSingle();
+        if (data) {
+          setStudent(data);
+          setQuery(data.full_name);
+        }
+        return;
       }
+
+      // Buka form dari kode kartu (mis. tautan langsung atau scan tanpa
+      // melewati listener global). Kolom card_code berasal dari migrasi 012.
+      if (!card) return;
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .eq('card_code', card)
+        .maybeSingle();
+
+      if (error) {
+        const msg =
+          error.code === '42703' || /card_code/i.test(error.message)
+            ? 'Fitur kartu belum aktif. Jalankan migrasi 012_student_card_code.sql di Supabase.'
+            : `Gagal membaca kartu: ${error.message}`;
+        toast.error(msg, 'Kartu Belum Aktif');
+        return;
+      }
+
+      if (!data) {
+        toast.error(`Kode ${card} belum terdaftar di data siswa.`, 'Kartu Tidak Dikenal');
+        return;
+      }
+
+      setStudent(data);
+      setQuery(data.full_name);
+      toast.success(`Kartu dikenali: ${data.full_name}`, 'Kartu Siswa');
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -413,6 +444,9 @@ function VisitForm() {
               aria-label="Cari siswa"
             />
           </div>
+          <span className="field__hint">
+            Scan kartu siswa di halaman mana pun untuk membuka form ini otomatis.
+          </span>
           <div style={{ marginTop: 12 }}>
             {searching && <div className="muted text-xs mb-2">Mencari…</div>}
             {results.length === 0 && query && !searching && (

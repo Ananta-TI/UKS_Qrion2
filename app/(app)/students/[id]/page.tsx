@@ -9,6 +9,7 @@ import {
   Stethoscope,
   TestTube,
   UserRound,
+  BadgeCheck,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
@@ -27,6 +28,8 @@ type StudentDetail = {
   allergies: string | null;
   chronic_diseases: string | null;
   created_at: string | null;
+  /** Ada bila migrasi 012 (kode kartu) sudah dijalankan. */
+  card_code?: string | null;
   gender?: StudentGender | null;
   birth_date?: string | null;
 };
@@ -74,23 +77,27 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const baseColumns =
     'id,nis,full_name,class,blood_type,allergies,chronic_diseases,created_at';
 
-  // Coba ikut ambil kolom demografi; bila migrasi 011 belum dijalankan,
-  // ulangi tanpa kolom tersebut supaya halaman tetap tampil.
-  const full = await supabase
-    .from('students')
-    .select(`${baseColumns},gender,birth_date`)
-    .eq('id', id)
-    .maybeSingle();
+  // Coba kombinasi kolom dari yang paling lengkap. Kolom dari migrasi 011/012
+  // yang belum dijalankan akan dilewati supaya halaman tetap tampil.
+  const attempts = [
+    `${baseColumns},card_code,gender,birth_date`,
+    `${baseColumns},gender,birth_date`,
+    `${baseColumns},card_code`,
+    baseColumns,
+  ];
 
-  const student = full.error
-    ? (
-        await supabase
-          .from('students')
-          .select(baseColumns)
-          .eq('id', id)
-          .maybeSingle()
-      ).data
-    : full.data;
+  let student: unknown = null;
+  for (const columns of attempts) {
+    const { data, error } = await supabase
+      .from('students')
+      .select(columns)
+      .eq('id', id)
+      .maybeSingle();
+    if (!error) {
+      student = data;
+      break;
+    }
+  }
 
   if (!student) notFound();
 
@@ -160,6 +167,14 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
               <div className="muted text-xs" style={{ marginTop: 2 }}>
                 Lahir {birthLabel}
                 {age !== null ? ` · ${age} tahun` : ''}
+              </div>
+            )}
+            {studentDetail.card_code && (
+              <div style={{ marginTop: 6 }}>
+                <span className="badge badge--good">
+                  <BadgeCheck className="ico" style={{ width: 13, height: 13 }} />
+                  Kartu terverifikasi
+                </span>
               </div>
             )}
           </div>

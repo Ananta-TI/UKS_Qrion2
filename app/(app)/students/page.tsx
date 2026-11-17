@@ -30,6 +30,7 @@ import {
   ChevronRight,
   ChevronRight as Chevron,
   VenusAndMars,
+  BadgeCheck,
 } from 'lucide-react';
 
 type StudentRow = {
@@ -40,6 +41,8 @@ type StudentRow = {
   blood_type: string | null;
   allergies: string | null;
   chronic_diseases: string | null;
+  /** Ada bila migrasi 012 (kode kartu) sudah dijalankan. */
+  card_code?: string | null;
   gender: StudentGender | null;
   birth_date: string | null;
 };
@@ -80,8 +83,8 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
-  // Migrasi 011 (gender & tanggal lahir) mungkin belum dijalankan; bila kolom
-  // belum ada, halaman tetap jalan tanpa kolom demografi.
+  // Migrasi 011 (gender & tanggal lahir) dan 012 (kode kartu) mungkin belum
+  // dijalankan; halaman tetap jalan tanpa kolom yang belum ada.
   const [demographics, setDemographics] = useState(true);
   const { view, setView } = useViewMode('students');
   // Di layar kecil selalu pakai mode kartu; toggle-nya disembunyikan.
@@ -126,9 +129,16 @@ export default function StudentsPage() {
   useEffect(() => {
     let cancelled = false;
     const term = query.trim();
-    const base =
-      'id,nis,full_name,class,blood_type,allergies,chronic_diseases';
-    const withDemo = `${base},gender,birth_date`;
+    const base = 'id,nis,full_name,class,blood_type,allergies,chronic_diseases';
+
+    // Coba kombinasi kolom dari yang paling lengkap. Kolom dari migrasi yang
+    // belum dijalankan akan dilewati agar daftar siswa tetap tampil.
+    const attempts = [
+      { columns: `${base},card_code,gender,birth_date`, demographics: true },
+      { columns: `${base},gender,birth_date`, demographics: true },
+      { columns: `${base},card_code`, demographics: false },
+      { columns: base, demographics: false },
+    ];
 
     const timer = setTimeout(async () => {
       setLoading(true);
@@ -147,20 +157,22 @@ export default function StudentsPage() {
         return req;
       };
 
-      let { data, count, error } = await run(withDemo);
+      let rows: unknown[] = [];
+      let totalCount = 0;
 
-      // Kolom demografi belum ada (migrasi 011 belum dijalankan):
-      // ulangi tanpa kolom tersebut agar daftar siswa tetap tampil.
-      if (error && (error.code === '42703' || /does not exist/i.test(error.message))) {
-        const retry = await run(base);
-        data = retry.data;
-        count = retry.count;
-        if (!cancelled) setDemographics(false);
+      for (const attempt of attempts) {
+        const result = await run(attempt.columns);
+        if (result.error) continue;
+
+        rows = result.data ?? [];
+        totalCount = result.count ?? 0;
+        if (!cancelled) setDemographics(attempt.demographics);
+        break;
       }
 
       if (!cancelled) {
-        setStudents((data ?? []) as unknown as StudentRow[]);
-        setTotal(count ?? 0);
+        setStudents(rows as unknown as StudentRow[]);
+        setTotal(totalCount);
         setLoading(false);
       }
     }, 220);
@@ -224,7 +236,8 @@ export default function StudentsPage() {
     setSaving(false);
 
     if (error) {
-      const duplicate = error.message.includes('duplicate key') || error.message.includes('students_school_nis_key');
+      const duplicate =
+        error.message.includes('duplicate key') || error.message.includes('students_school_nis_key');
       const msg = duplicate ? 'NIS sudah digunakan oleh siswa lain di sekolah ini.' : error.message;
       setFormError(msg);
       toast.error(msg, 'Gagal Memperbarui Siswa');
@@ -390,6 +403,14 @@ export default function StudentsPage() {
                       <Chevron className="ico muted" style={{ width: 15, height: 15 }} />
                     </div>
                     <div className="muted text-xs">NIS {s.nis} · Kelas {s.class ?? '-'}</div>
+                    {s.card_code && (
+                      <div style={{ marginTop: 5 }}>
+                        <span className="badge badge--good">
+                          <BadgeCheck className="ico" style={{ width: 12, height: 12 }} />
+                          Kartu terverifikasi
+                        </span>
+                      </div>
+                    )}
                     {(s.gender || s.birth_date) && (
                       <div className="muted text-xs" style={{ marginTop: 2 }}>
                         {s.gender ? genderLabel(s.gender) : ''}
@@ -479,6 +500,12 @@ export default function StudentsPage() {
                   <div className="slist__meta">
                     <span>NIS {s.nis}</span>
                     <span>Kelas {s.class ?? '-'}</span>
+                    {s.card_code && (
+                      <span className="badge badge--good">
+                        <BadgeCheck className="ico" style={{ width: 12, height: 12 }} />
+                        Kartu terverifikasi
+                      </span>
+                    )}
                     {s.gender && (
                       <span className="tag tag--iris">
                         <VenusAndMars className="ico" style={{ width: 12, height: 12 }} />

@@ -125,7 +125,8 @@ export function EditStudentButton({ student }: { student: EditableStudent }) {
     setSaving(false);
 
     if (error) {
-      const duplicate = error.message.includes('duplicate key') || error.message.includes('students_school_nis_key');
+      const duplicate =
+        error.message.includes('duplicate key') || error.message.includes('students_school_nis_key');
       const msg = duplicate ? 'NIS sudah digunakan oleh siswa lain di sekolah ini.' : error.message;
       setFormError(msg);
       toast.error(msg, 'Gagal Memperbarui Siswa');

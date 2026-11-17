@@ -48,6 +48,8 @@ export type StudentRow = {
   nis: string;
   full_name: string;
   class: string | null;
+  /** Kode unik kartu siswa (hasil scan). */
+  card_code: string | null;
   gender: StudentGender | null;
   birth_date: string | null;
   blood_type: string | null;
