@@ -33,6 +33,7 @@ type RangeKey = 'all' | 'today' | '7d' | '30d';
 
 type VisitRow = {
   id: string;
+  student_id: string;
   check_in_at: string;
   check_out_at: string | null;
   chief_complaint: string | null;
@@ -561,7 +562,15 @@ export default function VisitsPage() {
                               {(v.students?.full_name ?? '?').charAt(0)}
                             </span>
                             <div>
-                              <b>{v.students?.full_name ?? '-'}</b>
+                              <Link
+                                href={v.student_id ? `/visits/${v.student_id}` : '#'}
+                                prefetch={false}
+                                className="slist__name"
+                                style={{ textDecoration: 'none', color: 'inherit' }}
+                                title="Lihat detail siswa"
+                              >
+                                <b>{v.students?.full_name ?? '-'}</b>
+                              </Link>
                               <small>{v.students?.nis}</small>
                             </div>
                           </div>

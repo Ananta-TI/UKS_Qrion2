@@ -1,33 +1,26 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
-  Activity,
   AlertTriangle,
-  Ambulance,
   ArrowDownRight,
   ArrowUpRight,
+  BedDouble,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
-  Clock,
-  HeartPulse,
-  Package,
   Pill,
   Plus,
   Stethoscope,
   TrendingUp,
-  Users,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
-import { Sparkline } from '@/components/dashboard/spark';
-import { WeekSpark } from '@/components/dashboard/week-spark';
-import { YearChart } from '@/components/dashboard/year-chart';
+import { TrendChart } from '@/components/dashboard/trend-chart';
 import { getAuthUser, getSessionProfile } from '@/lib/auth';
 import { fetchAllRows } from '@/lib/supabase/paginate';
 import { visitStatusLabels } from '@/lib/visit-status';
-import { isExpiringSoon, isLowStock } from '@/lib/stock';
+import { DAY_MS, expiryState, isExpiryWarning, isLowStock } from '@/lib/stock';
 
 type VisitRow = {
   id: string;
@@ -35,7 +28,6 @@ type VisitRow = {
   check_in_at: string;
   final_status: string | null;
   chief_complaint: string | null;
-  treatment: string | null;
   students?: {
     full_name: string | null;
     nis: string | null;
@@ -54,22 +46,20 @@ type MedicineRow = {
   location: string | null;
 };
 
-type ActivityRow = {
-  id: string;
-  actor_name: string | null;
-  action: string;
-  entity: string;
-  summary: string;
-  created_at: string;
-};
-
-const statusMap: Record<string, { label: string; cls: string; dot: string }> = {
-  back_to_class: { label: visitStatusLabels.back_to_class, cls: 'badge badge--good', dot: 'var(--good)' },
-  referred: { label: visitStatusLabels.referred, cls: 'badge badge--bad', dot: 'var(--bad)' },
-  picked_up: { label: visitStatusLabels.picked_up, cls: 'badge badge--warn', dot: 'var(--warn)' },
+const statusMap: Record<string, { label: string; cls: string }> = {
+  back_to_class: { label: visitStatusLabels.back_to_class, cls: 'badge badge--good' },
+  referred: { label: visitStatusLabels.referred, cls: 'badge badge--bad' },
+  picked_up: { label: visitStatusLabels.picked_up, cls: 'badge badge--warn' },
 };
 
 const tones = ['av--sky', 'av--teal', 'av--coral', 'av--amber', 'av--rose', 'av--plum', 'av--iris'];
+
+const periods = [
+  { key: '7', label: '7 hari', days: 7 },
+  { key: '30', label: '30 hari', days: 30 },
+  { key: '90', label: '3 bulan', days: 90 },
+  { key: '365', label: '1 tahun', days: 365 },
+];
 
 function startOfDay(date: Date) {
   const next = new Date(date);
@@ -81,24 +71,6 @@ function dayKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
-function initials(value: string | null | undefined) {
-  const parts = (value ?? '').trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return 'UK';
-  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
-}
-
-function timeAgo(value: string) {
-  const diff = Date.now() - new Date(value).getTime();
-  const minutes = Math.max(1, Math.floor(diff / 60000));
-
-  if (minutes < 60) return `${minutes} menit lalu`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} jam lalu`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} hari lalu`;
-  return new Date(value).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-}
-
 function greeting(hour: number) {
   if (hour < 11) return 'Selamat pagi';
   if (hour < 15) return 'Selamat siang';
@@ -106,13 +78,77 @@ function greeting(hour: number) {
   return 'Selamat malam';
 }
 
-function badgeFor(action: string) {
-  if (action === 'delete') return 'Hapus';
-  if (action === 'create') return 'Tambah';
-  if (action === 'restock' || action === 'stock_out') return 'Stok';
-  if (action === 'login' || action === 'logout') return 'Sesi';
-  if (action === 'export') return 'Ekspor';
-  return 'Ubah';
+function deltaText(delta: number) {
+  if (delta === 0) return 'tetap';
+  return `${delta > 0 ? 'naik' : 'turun'} ${Math.abs(delta)}%`;
+}
+
+function percent(part: number, total: number) {
+  return total ? Math.round((part / total) * 100) : 0;
+}
+
+/** Titik grafik tren: harian untuk periode pendek, bulanan untuk 1 tahun. */
+function buildTrendPoints(
+  periodDays: number,
+  periodStart: Date,
+  now: Date,
+  visits: VisitRow[]
+): { date: number; label: string; total: number }[] {
+  if (periodDays >= 365) {
+    const buckets: { date: Date; label: string; total: number }[] = [];
+    const cursor = new Date(periodStart.getFullYear(), periodStart.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    while (cursor <= end) {
+      buckets.push({
+        date: new Date(cursor),
+        label: cursor.toLocaleDateString('id-ID', { month: 'short' }),
+        total: 0,
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    const index = new Map(
+      buckets.map((bucket, i) => [`${bucket.date.getFullYear()}-${bucket.date.getMonth()}`, i])
+    );
+    visits.forEach((visit) => {
+      const date = new Date(visit.check_in_at);
+      // Bucket pertama bisa dimulai sebelum periode terpilih; jangan hitung
+      // kunjungan di luar rentang agar total grafik sama dengan ringkasan.
+      if (date.getTime() < periodStart.getTime()) return;
+      const at = index.get(`${date.getFullYear()}-${date.getMonth()}`);
+      if (at !== undefined) buckets[at].total += 1;
+    });
+
+    return buckets.map((bucket) => ({
+      date: bucket.date.getTime(),
+      label: bucket.label,
+      total: bucket.total,
+    }));
+  }
+
+  const start = startOfDay(periodStart);
+  const buckets = Array.from({ length: periodDays }, (_, i) => {
+    const date = new Date(start);
+    date.setDate(date.getDate() + i);
+    return {
+      date,
+      label: date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+      total: 0,
+    };
+  });
+
+  const index = new Map(buckets.map((bucket, i) => [dayKey(bucket.date), i]));
+  visits.forEach((visit) => {
+    const at = index.get(dayKey(new Date(visit.check_in_at)));
+    if (at !== undefined) buckets[at].total += 1;
+  });
+
+  return buckets.map((bucket) => ({
+    date: bucket.date.getTime(),
+    label: bucket.label,
+    total: bucket.total,
+  }));
 }
 
 export default async function DashboardPage({
@@ -123,12 +159,6 @@ export default async function DashboardPage({
   const { user, supabase } = await getAuthUser();
   if (!user) redirect('/auth/signin');
 
-  const periods = [
-    { key: '7', label: '7 hari', days: 7 },
-    { key: '30', label: '30 hari', days: 30 },
-    { key: '90', label: '3 bulan', days: 90 },
-    { key: '365', label: '1 tahun', days: 365 },
-  ];
   const params = await searchParams;
   const period = periods.find((item) => item.key === (params.period ?? '')) ?? periods[1];
 
@@ -136,31 +166,32 @@ export default async function DashboardPage({
   const todayStart = startOfDay(now);
   const tomorrowStart = new Date(todayStart);
   tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const yesterdayStart = new Date(todayStart);
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
   const yearStart = new Date(now.getFullYear(), 0, 1);
-  const since30 = new Date(todayStart);
-  since30.setDate(since30.getDate() - 29);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
   const periodStart = new Date(todayStart);
   periodStart.setDate(periodStart.getDate() - (period.days - 1));
+  // Periode sebelumnya dipakai untuk membandingkan tren pada kartu grafik.
+  const previousPeriodStart = new Date(periodStart);
+  previousPeriodStart.setDate(previousPeriodStart.getDate() - period.days);
+
   const lookback = new Date(
-    Math.min(yearStart.getTime(), since30.getTime(), periodStart.getTime())
+    Math.min(yearStart.getTime(), previousPeriodStart.getTime())
   );
 
   // Mulai query data lebih dulu, lalu ambil profil paralel dengan query tersebut.
   const dataPromise = Promise.all([
-    fetchAllRows<{ id: string; class: string | null }>((from, to) =>
-      supabase.from('students').select('id,class').order('id').range(from, to)
-    ),
-    supabase
-      .from('visits')
-      .select('id,student_id,check_in_at,final_status,chief_complaint,treatment,students(full_name,nis,class)')
-      .gte('check_in_at', todayStart.toISOString())
-      .lt('check_in_at', tomorrowStart.toISOString())
-      .order('check_in_at', { ascending: false }),
-    fetchAllRows((from, to) =>
+    fetchAllRows<VisitRow>((from, to) =>
       supabase
         .from('visits')
-        .select('id,student_id,check_in_at,final_status,students(full_name,nis,class)')
+        .select(
+          'id,student_id,check_in_at,final_status,chief_complaint,students(full_name,nis,class)'
+        )
         .gte('check_in_at', lookback.toISOString())
         .order('check_in_at', { ascending: false })
         .order('id', { ascending: false })
@@ -170,188 +201,107 @@ export default async function DashboardPage({
       .from('medicines')
       .select('id,name,category,unit,stock,min_stock,expiry_date,location')
       .order('name', { ascending: true }),
-    supabase
-      .from('activity_logs')
-      .select('id,actor_name,action,entity,summary,created_at')
-      .order('created_at', { ascending: false })
-      .limit(7),
   ]);
 
   const { profile } = await getSessionProfile();
-  const [studentsRes, todayRes, visitsRes, medicinesRes, activityRes] = await dataPromise;
+  const [visitsRes, medicinesRes] = await dataPromise;
 
-  const students = (studentsRes.data ?? []) as { id: string; class: string | null }[];
-  const todayVisits = (todayRes.data ?? []) as unknown as VisitRow[];
   const visits = (visitsRes.data ?? []) as unknown as VisitRow[];
   const medicines = (medicinesRes.data ?? []) as MedicineRow[];
-  const activity = (activityRes.data ?? []) as ActivityRow[];
-  const activityReady = !activityRes.error;
 
-  const totalStudents = students.length;
-  const classCount = new Set(students.map((student) => student.class).filter(Boolean)).size;
+  const inRange = (visit: VisitRow, from: Date, to?: Date) => {
+    const time = new Date(visit.check_in_at).getTime();
+    return time >= from.getTime() && (to ? time < to.getTime() : true);
+  };
 
-  // Kunjungan dalam periode ringkasan yang dipilih (7 hari s/d 1 tahun).
-  const periodVisits = visits.filter((visit) => new Date(visit.check_in_at) >= periodStart);
-  const uniqueStudentsPeriod = new Set(periodVisits.map((visit) => visit.student_id)).size;
-
-  const monthly = Array.from({ length: 12 }, (_, month) => ({
-    label: new Date(now.getFullYear(), month, 1).toLocaleDateString('id-ID', { month: 'short' }),
-    total: 0,
-    referred: 0,
-    returned: 0,
-  }));
-
-  visits.forEach((visit) => {
-    const date = new Date(visit.check_in_at);
-    if (date.getFullYear() !== now.getFullYear()) return;
-    const bucket = monthly[date.getMonth()];
-    bucket.total += 1;
-    if (visit.final_status === 'referred') bucket.referred += 1;
-    if (visit.final_status === 'back_to_class') bucket.returned += 1;
-  });
-
-  const yearTotal = monthly.reduce((sum, month) => sum + month.total, 0);
-  const returnedYear = monthly.reduce((sum, month) => sum + month.returned, 0);
-  const referredYear = monthly.reduce((sum, month) => sum + month.referred, 0);
-  const monthTotal = monthly[now.getMonth()].total;
-  const previousMonthTotal = now.getMonth() > 0 ? monthly[now.getMonth() - 1].total : null;
-  const monthGrowth =
-    previousMonthTotal && previousMonthTotal > 0
-      ? Math.round(((monthTotal - previousMonthTotal) / previousMonthTotal) * 100)
-      : null;
-
-  const returnRate = yearTotal ? Math.round((returnedYear / yearTotal) * 100) : 0;
-  const referralRate = yearTotal ? Math.round((referredYear / yearTotal) * 100) : 0;
-
-  const monthDaily = Array.from({ length: now.getDate() }, () => 0);
-  visits.forEach((visit) => {
-    const date = new Date(visit.check_in_at);
-    if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) {
-      monthDaily[date.getDate() - 1] += 1;
-    }
-  });
-
-  // Sparkline mengikuti periode terpilih: harian untuk <= 30 hari,
-  // bulanan untuk periode yang lebih panjang.
-  const periodSpark =
-    period.days <= 30
-      ? Array.from({ length: period.days }, (_, index) => {
-          const date = new Date(todayStart);
-          date.setDate(date.getDate() - (period.days - 1 - index));
-          const key = dayKey(date);
-          return periodVisits.filter((visit) => dayKey(new Date(visit.check_in_at)) === key)
-            .length;
-        })
-      : monthly.map((month) => month.total);
-
-  const last7 = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(todayStart);
-    date.setDate(date.getDate() - (6 - index));
-    return {
-      key: dayKey(date),
-      label: date.toLocaleDateString('id-ID', { weekday: 'short' }),
-      total: 0,
-      referred: 0,
-    };
-  });
-  const last7Map = new Map(last7.map((day) => [day.key, day]));
-  visits.forEach((visit) => {
-    const bucket = last7Map.get(dayKey(new Date(visit.check_in_at)));
-    if (!bucket) return;
-    bucket.total += 1;
-    if (visit.final_status === 'referred') bucket.referred += 1;
-  });
-
+  const todayVisits = visits.filter((visit) => inRange(visit, todayStart, tomorrowStart));
+  const yesterdayVisits = visits.filter((visit) => inRange(visit, yesterdayStart, todayStart));
   const todayCount = todayVisits.length;
-  const yesterdayCount = last7[5].total;
-  const weekTotal = last7.reduce((sum, day) => sum + day.total, 0);
-  const weekReferred = last7.reduce((sum, day) => sum + day.referred, 0);
+  const yesterdayCount = yesterdayVisits.length;
   const dayDelta =
     yesterdayCount > 0
       ? Math.round(((todayCount - yesterdayCount) / yesterdayCount) * 100)
       : todayCount > 0
         ? 100
         : 0;
-  const todayStatus = { back_to_class: 0, referred: 0, picked_up: 0, unknown: 0 };
-  todayVisits.forEach((visit) => {
-    const key = (visit.final_status ?? 'unknown') as keyof typeof todayStatus;
-    if (key in todayStatus) todayStatus[key] += 1;
-  });
-  const referredToday = todayStatus.referred;
-  const todayStatusTotal = Math.max(1, todayCount);
 
-  const lowStockAll = medicines.filter((medicine) => isLowStock(medicine.stock, medicine.min_stock));
+  const monthTotal = visits.filter((visit) => inRange(visit, monthStart, nextMonthStart)).length;
+  const previousMonthTotal = visits.filter((visit) =>
+    inRange(visit, previousMonthStart, monthStart)
+  ).length;
+  const monthGrowth =
+    previousMonthTotal > 0
+      ? Math.round(((monthTotal - previousMonthTotal) / previousMonthTotal) * 100)
+      : null;
+
+  const yearVisits = visits.filter((visit) => inRange(visit, yearStart));
+  const yearTotal = yearVisits.length;
+  const referredYear = yearVisits.filter((visit) => visit.final_status === 'referred').length;
+  const returnedYear = yearVisits.filter((visit) => visit.final_status === 'back_to_class').length;
+  const referredStudentsYear = new Set(
+    yearVisits
+      .filter((visit) => visit.final_status === 'referred')
+      .map((visit) => visit.student_id)
+  ).size;
+  const returnedStudentsYear = new Set(
+    yearVisits
+      .filter((visit) => visit.final_status === 'back_to_class')
+      .map((visit) => visit.student_id)
+  ).size;
+  const referralRate = percent(referredYear, yearTotal);
+  const returnRate = percent(returnedYear, yearTotal);
+  const referredToday = todayVisits.filter((visit) => visit.final_status === 'referred').length;
+
+  const periodVisits = visits.filter((visit) => inRange(visit, periodStart));
+  const previousPeriodTotal = visits.filter((visit) =>
+    inRange(visit, previousPeriodStart, periodStart)
+  ).length;
+  const periodDelta =
+    previousPeriodTotal > 0
+      ? Math.round(((periodVisits.length - previousPeriodTotal) / previousPeriodTotal) * 100)
+      : periodVisits.length > 0
+        ? 100
+        : 0;
+
+  const trendPoints = buildTrendPoints(period.days, periodStart, now, visits);
+
+  const lowStockAll = medicines.filter((medicine) =>
+    isLowStock(medicine.stock, medicine.min_stock)
+  );
   const lowStock = [...lowStockAll]
     .sort((a, b) => (a.stock ?? 0) - (a.min_stock ?? 5) - ((b.stock ?? 0) - (b.min_stock ?? 5)))
+    .slice(0, 3);
+
+  const expiringAll = medicines
+    .filter((medicine) => isExpiryWarning(medicine.expiry_date, now.getTime()))
+    .sort(
+      (a, b) =>
+        new Date(a.expiry_date ?? 0).getTime() - new Date(b.expiry_date ?? 0).getTime()
+    );
+  const expiringList = expiringAll.slice(0, 3);
+
+  const attentionCount = new Set([
+    ...lowStockAll.map((medicine) => medicine.id),
+    ...expiringAll.map((medicine) => medicine.id),
+  ]).size;
+
+  const complaintMap = new Map<string, { label: string; count: number }>();
+  periodVisits.forEach((visit) => {
+    const text = visit.chief_complaint?.trim();
+    if (!text) return;
+    const key = text.toLowerCase();
+    const item = complaintMap.get(key) ?? { label: text, count: 0 };
+    item.count += 1;
+    complaintMap.set(key, item);
+  });
+  const topComplaints = [...complaintMap.entries()]
+    .map(([key, value]) => ({ key, ...value }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
     .slice(0, 5);
-  const expiringSoon = medicines.filter((medicine) =>
-    isExpiringSoon(medicine.expiry_date, now.getTime())
-  ).length;
+  const maxComplaint = Math.max(1, ...topComplaints.map((item) => item.count));
 
-  const funnel = [
-    { label: visitStatusLabels.back_to_class, desc: 'ditangani di UKS', count: 0 },
-    { label: visitStatusLabels.referred, desc: 'butuh penanganan lanjut', count: 0 },
-    { label: visitStatusLabels.picked_up, desc: 'pulang bersama wali', count: 0 },
-  ];
-  periodVisits.forEach((visit) => {
-    if (visit.final_status === 'back_to_class') funnel[0].count += 1;
-    if (visit.final_status === 'referred') funnel[1].count += 1;
-    if (visit.final_status === 'picked_up') funnel[2].count += 1;
-  });
-  const funnelTotal = periodVisits.length;
-  const funnelMax = Math.max(1, ...funnel.map((row) => row.count));
-  const notReturned = funnel[1].count + funnel[2].count;
+  const recentVisits = visits.slice(0, 5);
 
-  const classTotals = new Map<string, { visits: number; students: Set<string> }>();
-  periodVisits.forEach((visit) => {
-    const klass = visit.students?.class?.trim() || 'Tanpa kelas';
-    const current = classTotals.get(klass) ?? { visits: 0, students: new Set<string>() };
-    current.visits += 1;
-    current.students.add(visit.student_id);
-    classTotals.set(klass, current);
-  });
-  const topClasses = [...classTotals.entries()]
-    .map(([klass, value]) => ({ klass, visits: value.visits, students: value.students.size }))
-    .sort((a, b) => b.visits - a.visits)
-    .slice(0, 4);
-  const maxClassVisits = Math.max(1, ...topClasses.map((item) => item.visits));
-
-  // Siswa yang paling sering datang pada periode terpilih: berguna untuk
-  // melihat kasus berulang, bukan sekadar angka kunjungan.
-  const studentTotals = new Map<
-    string,
-    { name: string; nis: string | null; klass: string | null; visits: number }
-  >();
-  periodVisits.forEach((visit) => {
-    const current = studentTotals.get(visit.student_id) ?? {
-      name: visit.students?.full_name ?? 'Siswa',
-      nis: visit.students?.nis ?? null,
-      klass: visit.students?.class ?? null,
-      visits: 0,
-    };
-    current.visits += 1;
-    studentTotals.set(visit.student_id, current);
-  });
-  const topStudents = [...studentTotals.entries()]
-    .map(([id, value]) => ({ id, ...value }))
-    .sort((a, b) => b.visits - a.visits || a.name.localeCompare(b.name))
-    .slice(0, 5);
-  const maxStudentVisits = Math.max(1, ...topStudents.map((item) => item.visits));
-
-  const timeline = [...todayVisits]
-    .sort((a, b) => new Date(a.check_in_at).getTime() - new Date(b.check_in_at).getTime())
-    .map((visit) => {
-      const date = new Date(visit.check_in_at);
-      const hours = date.getHours() + date.getMinutes() / 60;
-      return {
-        id: visit.id,
-        position: Math.min(100, Math.max(0, ((hours - 7) / 10) * 100)),
-        time: date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-        status: visit.final_status,
-      };
-    });
-
-  const recentVisits = todayVisits.slice(0, 5);
   const firstName = (profile?.full_name ?? user.email ?? 'Petugas UKS').trim().split(/\s+/)[0];
   const dateLabel = now.toLocaleDateString('id-ID', {
     weekday: 'long',
@@ -360,390 +310,310 @@ export default async function DashboardPage({
   });
 
   return (
-    <AppShell
-      title="Dashboard"
-      crumbs={[{ label: 'UKS', href: '/' }, { label: 'Dashboard' }]}
-      actions={
-        <div className="shift">
-          <span className="shift__clock">
-            <i />
-            Hari ini
-          </span>
-          <span className="shift__txt">
-            <b>{dateLabel}</b>
-            <small>{weekTotal} kunjungan 7 hari terakhir</small>
-          </span>
-        </div>
-      }
-    >
+    <AppShell title="Dashboard" crumbs={[{ label: 'UKS', href: '/' }, { label: 'Dashboard' }]}>
       <div className="dash">
-        <div className="toolbar" style={{ marginBottom: 0 }}>
-          <div className="chips" role="group" aria-label="Periode ringkasan">
-            {periods.map((item) => (
-              <Link
-                key={item.key}
-                href={item.key === '30' ? '/' : `/?period=${item.key}`}
-                prefetch={false}
-                className="chip chip--accent"
-                aria-pressed={period.key === item.key}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-          <span className="toolbar__spacer" />
-          <span className="muted text-xs">
-            Ringkasan {period.label} terakhir · {periodVisits.length} kunjungan
-          </span>
-        </div>
-
-        <div className="dash__heroRow">
-          <section className="card dash-hero">
-            <div className="dash-hero__top">
-              <span className="dash-hero__eyebrow">{dateLabel}</span>
-              <div className="dash-hero__actions">
-                <Link href="/visits/new" prefetch={false} className="btn btn--primary btn--sm">
-                  <Plus className="ico" /> Catat kunjungan
-                </Link>
-                <Link href="/reports" prefetch={false} className="btn btn--ghost btn--sm">
-                  <TrendingUp className="ico" /> Lihat laporan
-                </Link>
-              </div>
-            </div>
-
-            <h1 className="dash-hero__title">
+        <div className="dash-greet">
+          <div>
+            <h2 className="dash-greet__title">
               {greeting(now.getHours())}, {firstName}.
-            </h1>
-
-            <p className="dash-hero__lead">
-              <b>{todayCount} kunjungan</b> tercatat hari ini, <b>{referredToday} dirujuk</b>, dan{' '}
-              <b>{lowStockAll.length} obat</b> perlu ditambah stok
-              {expiringSoon > 0 ? (
+            </h2>
+            <p className="dash-greet__sub">
+              {dateLabel} · <b>{todayCount} kunjungan</b> hari ini
+              {referredToday > 0 ? (
                 <>
-                  . <b>{expiringSoon} obat</b> mendekati kedaluwarsa.
+                  {' '}
+                  · <b>{referredToday} dirujuk</b>
                 </>
-              ) : (
-                '.'
-              )}
+              ) : null}
+              {lowStockAll.length > 0 ? (
+                <>
+                  {' '}
+                  · <b>{lowStockAll.length} obat</b> perlu ditambah stok
+                </>
+              ) : null}
+              {expiringAll.length > 0 ? (
+                <>
+                  {' '}
+                  · <b>{expiringAll.length} obat</b> mendekati kedaluwarsa
+                </>
+              ) : null}
             </p>
-
-            {timeline.length > 0 ? (
-              <div className="dash-hero__timeline">
-                <div className="dash-hero__track">
-                  <span className="dash-hero__rail" aria-hidden="true" />
-                  {timeline.map((item) => (
-                    <span
-                      key={item.id}
-                      className={`dash-hero__dot ${item.status ? `is-${item.status}` : ''}`}
-                      style={{ left: `${item.position}%` }}
-                      title={`Kunjungan ${item.time}`}
-                    />
-                  ))}
-                  <span
-                    className="dash-hero__bubble"
-                    style={{ left: `${Math.min(92, Math.max(8, timeline[timeline.length - 1].position))}%` }}
-                  >
-                    <Clock className="ico" />
-                    {timeline[timeline.length - 1].time}
-                  </span>
-                </div>
-                <div className="dash-hero__hours" aria-hidden="true">
-                  <span>07</span>
-                  <span>09</span>
-                  <span>11</span>
-                  <span>13</span>
-                  <span>15</span>
-                  <span>17</span>
-                </div>
-              </div>
-            ) : (
-              <div className="dash-hero__empty">
-                <HeartPulse className="ico" />
-                <span>Belum ada kunjungan hari ini. Catat kunjungan pertama untuk memulai.</span>
-              </div>
-            )}
-
-            <div className="dash-hero__foot">
-              <span>
-                <Users className="ico" /> {totalStudents} siswa · {classCount} kelas
-              </span>
-              <span>
-                <CalendarDays className="ico" /> {weekTotal} kunjungan 7 hari terakhir
-              </span>
-            </div>
-          </section>
-
-          <section className="card dash-today">
-            <div className="card__head">
-              <div className="card__title">
-                <HeartPulse className="ico" />
-                <span>
-                  Kunjungan hari ini
-                  <span className="card__sub">Dibanding 7 hari terakhir.</span>
-                </span>
-              </div>
-              <Link href="/visits" prefetch={false} className="card__link dash-link">
-                Semua <ChevronRight className="ico" />
-              </Link>
-            </div>
-
-            <div className="dash-today__value">
-              <CountUp value={todayCount} />
-              <span>kunjungan</span>
-            </div>
-
-            <div className="dash-today__delta">
-              <span className={dayDelta >= 0 ? 'dash-delta is-up' : 'dash-delta is-down'}>
-                {dayDelta >= 0 ? <ArrowUpRight className="ico" /> : <ArrowDownRight className="ico" />}
-                {dayDelta > 0 ? '+' : ''}
-                {dayDelta}%
-              </span>
-              <small>dibanding kemarin</small>
-            </div>
-
-            <WeekSpark points={last7} />
-
-            <div className="dash-today__foot">
-              <div className="legend">
-                <span>
-                  <i style={{ background: 'var(--chart)' }} /> Kunjungan
-                </span>
-                <span>
-                  <i style={{ background: 'var(--chart-2)' }} /> Rujukan
-                </span>
-              </div>
-              <small>{weekReferred} rujukan 7 hari terakhir</small>
-            </div>
-          </section>
+          </div>
+          <div className="dash-greet__actions">
+            <Link href="/visits/new" prefetch={false} className="btn btn--primary btn--sm">
+              <Plus className="ico" /> Catat kunjungan
+            </Link>
+            <Link href="/reports" prefetch={false} className="btn btn--ghost btn--sm">
+              <TrendingUp className="ico" /> Lihat laporan
+            </Link>
+          </div>
         </div>
 
-        <section className="dash__kpis" aria-label="Ringkasan bulan ini">
-          <div className="dash-kpi dash-kpi--dark">
-            <div className="dash-kpi__label">
-              <span className="dash-kpi__ico">
-                <ClipboardList className="ico" />
-              </span>
-              Kunjungan bulan ini
+        <section className="dash__kpis" aria-label="Ringkasan kunjungan">
+          <article className="kpi">
+            <span className="kpi__ico kpi__ico--green">
+              <Stethoscope className="ico" />
+            </span>
+            <span className="kpi__label">Hari ini</span>
+            <div className="kpi__value">
+              <CountUp value={todayCount} />
+              <small>kunjungan</small>
             </div>
-            <div className="dash-kpi__row">
-              <div className="dash-kpi__value">
-                <CountUp value={monthTotal} />
-              </div>
-              <Sparkline values={monthDaily} tone="on-ink" />
-            </div>
-            <div className="dash-kpi__foot">
-              {monthGrowth === null ? `${monthly[now.getMonth()].label} berjalan` : `${monthGrowth > 0 ? '+' : ''}${monthGrowth}% dari bulan lalu`}
-            </div>
-          </div>
+            <span
+              className={`kpi__foot ${dayDelta < 0 ? 'is-down' : dayDelta > 0 ? 'is-up' : ''}`}
+            >
+              {dayDelta !== 0 &&
+                (dayDelta < 0 ? (
+                  <ArrowDownRight className="ico" />
+                ) : (
+                  <ArrowUpRight className="ico" />
+                ))}
+              {dayDelta === 0 ? 'tetap dibanding kemarin' : `${deltaText(dayDelta)} dibanding kemarin`}
+            </span>
+          </article>
 
-          <div className="dash-kpi dash-kpi--accent">
-            <div className="dash-kpi__label">
-              <span className="dash-kpi__ico">
-                <Users className="ico" />
-              </span>
-              Siswa dilayani
+          <article className="kpi">
+            <span className="kpi__ico kpi__ico--blue">
+              <CalendarDays className="ico" />
+            </span>
+            <span className="kpi__label">Bulan ini</span>
+            <div className="kpi__value">
+              <CountUp value={monthTotal} />
+              <small>kunjungan</small>
             </div>
-            <div className="dash-kpi__row">
-              <div className="dash-kpi__value">
-                <CountUp value={uniqueStudentsPeriod} />
-              </div>
-              <Sparkline values={periodSpark} tone="on-accent" />
-            </div>
-            <div className="dash-kpi__foot">{period.label} terakhir · {periodVisits.length} kunjungan</div>
-          </div>
+            <span
+              className={`kpi__foot ${
+                monthGrowth === null ? '' : monthGrowth < 0 ? 'is-down' : monthGrowth > 0 ? 'is-up' : ''
+              }`}
+            >
+              {monthGrowth === null ? (
+                'bulan berjalan'
+              ) : (
+                <>
+                  {monthGrowth !== 0 &&
+                    (monthGrowth < 0 ? (
+                      <ArrowDownRight className="ico" />
+                    ) : (
+                      <ArrowUpRight className="ico" />
+                    ))}
+                  {monthGrowth === 0
+                    ? 'tetap dari bulan lalu'
+                    : `${deltaText(monthGrowth)} dari bulan lalu`}
+                </>
+              )}
+            </span>
+          </article>
 
-          <div className="dash-kpi">
-            <div className="dash-kpi__label">
-              <span className="dash-kpi__ico">
-                <Ambulance className="ico" />
-              </span>
-              Dirujuk tahun ini
+          <article className="kpi">
+            <span className="kpi__ico kpi__ico--red">
+              <AlertTriangle className="ico" />
+            </span>
+            <span className="kpi__label">Dirujuk tahun ini</span>
+            <div className="kpi__value">
+              <CountUp value={referredStudentsYear} />
+              <small>siswa</small>
             </div>
-            <div className="dash-kpi__row">
-              <div className="dash-kpi__value">
-                <CountUp value={referredYear} />
-              </div>
-              <Sparkline values={monthly.map((month) => month.referred)} tone="bad" />
-            </div>
-            <div className="dash-kpi__foot">
-              {referralRate}% dari {yearTotal} kunjungan · butuh penanganan lanjut
-            </div>
-          </div>
+            <span className="kpi__foot">
+              {referralRate}% dari {yearTotal} kunjungan
+            </span>
+          </article>
 
-          <div className="dash-kpi">
-            <div className="dash-kpi__label">
-              <span className="dash-kpi__ico">
-                <CheckCircle2 className="ico" />
-              </span>
-              Kembali ke kelas
+          <article className="kpi">
+            <span className="kpi__ico kpi__ico--blue">
+              <BedDouble className="ico" />
+            </span>
+            <span className="kpi__label">Istirahat di UKS</span>
+            <div className="kpi__value">
+              <CountUp value={returnedStudentsYear} />
+              <small>siswa</small>
             </div>
-            <div className="dash-kpi__row">
-              <div className="dash-kpi__value">
-                <CountUp value={returnRate} suffix="%" />
-              </div>
-              <Sparkline
-                values={monthly.map((month) =>
-                  month.total ? Math.round((month.returned / month.total) * 100) : 0
-                )}
-              />
-            </div>
-            <div className="dash-kpi__foot">
-              {returnedYear} dari {yearTotal} kunjungan tahun ini
-            </div>
-          </div>
+            <span className="kpi__foot">
+              {returnRate}% dari {yearTotal} kunjungan
+            </span>
+          </article>
         </section>
 
         <div className="dash__split dash__split--main">
-          <YearChart points={monthly} />
+          <TrendChart
+            points={trendPoints}
+            periodKey={period.key}
+            periodLabel={period.label}
+            total={periodVisits.length}
+            delta={periodDelta}
+          />
 
-          <div className="dash__side">
-          <section className="card dash-funnel">
-            <div className="card__head">
-              <div className="card__title">
-                <CheckCircle2 className="ico" />
-                <span>
-                  Status akhir
-                  <span className="card__sub">Hasil penanganan {period.label} terakhir.</span>
+          <section className="card attention">
+            <header className="attention__head">
+              <h2>Perlu perhatian</h2>
+              {attentionCount > 0 && (
+                <span className="badge badge--bad">
+                  <AlertTriangle className="ico" style={{ width: 12, height: 12 }} />
+                  {attentionCount} obat
                 </span>
-              </div>
-              <span className="spill spill--iris">
-                <i />
-                {funnelTotal} kunjungan
-              </span>
-            </div>
+              )}
+            </header>
 
-            <div className="dash-funnel__rows">
-              {funnel.map((row, index) => {
-                const percent = funnelTotal ? Math.round((row.count / funnelTotal) * 100) : 0;
-                return (
-                  <div className="dash-funnel__row" key={row.label}>
-                    <div className="dash-funnel__meta">
-                      <b>{row.label}</b>
-                      <small>{row.desc}</small>
-                    </div>
-                    <span className="dash-funnel__bar">
-                      <i
-                        style={{
-                          width: `${Math.max(row.count ? 4 : 0, (row.count / funnelMax) * 100)}%`,
-                          opacity: 1 - index * 0.2,
-                        }}
-                      />
-                    </span>
-                    <span className="dash-funnel__val">
-                      {row.count}
-                      <small>{percent}%</small>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="dash-funnel__note">
-              <AlertTriangle className="ico" />
-              <span>
-                {funnelTotal
-                  ? `${notReturned} kunjungan tidak kembali ke kelas.`
-                  : `Belum ada kunjungan pada ${period.label} terakhir.`}
-              </span>
-            </div>
-          </section>
-
-          <section className="card dash-rank">
-            <div className="card__head">
-              <div className="card__title">
-                <Users className="ico" />
-                <span>
-                  Siswa paling sering
-                  <span className="card__sub">{period.label} terakhir.</span>
+            {lowStockAll.length === 0 && expiringAll.length === 0 ? (
+              <div className="attention__safe">
+                <span className="attention__safeIco">
+                  <CheckCircle2 className="ico" />
                 </span>
-              </div>
-            </div>
-
-            {topStudents.length === 0 ? (
-              <div className="empty">
-                <Users className="ico" />
-                <div className="empty__title">Belum ada kunjungan</div>
-                <div className="empty__text">
-                  Siswa dengan kunjungan terbanyak akan muncul di sini.
+                <div>
+                  <b>Semua aman</b>
+                  <small>Stok dan masa berlaku obat dalam kondisi baik.</small>
                 </div>
               </div>
             ) : (
-              <div className="dash-rank__list">
-                {topStudents.map((item, index) => (
-                  <div className="dash-rank__row" key={item.id}>
-                    <span className="dash-rank__rank">{index + 1}</span>
-                    <div className="dash-rank__main">
-                      <b>{item.name}</b>
-                      <small>
-                        {item.klass ? `Kelas ${item.klass}` : 'Tanpa kelas'}
-                        {item.nis ? ` · ${item.nis}` : ''}
-                      </small>
-                      <span className="dash-rank__bar">
-                        <i style={{ width: `${(item.visits / maxStudentVisits) * 100}%` }} />
-                      </span>
-                    </div>
-                    <span className="dash-rank__val">{item.visits}</span>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="attention__group">
+                  <p className="attention__label">Stok menipis</p>
+                  {lowStock.length === 0 ? (
+                    <p className="attention__empty">Semua stok di atas batas minimum.</p>
+                  ) : (
+                    lowStock.map((medicine) => {
+                      const min = medicine.min_stock ?? 5;
+                      const stock = medicine.stock ?? 0;
+                      const unit = medicine.unit ?? 'pcs';
+                      return (
+                        <div className="attention__row" key={medicine.id}>
+                          <span className="attention__ico attention__ico--low">
+                            <Pill className="ico" />
+                          </span>
+                          <div className="attention__main">
+                            <b>{medicine.name}</b>
+                            <small>
+                              min {min} {unit}
+                            </small>
+                          </div>
+                          <span className="badge badge--warn attention__badge">
+                            Sisa {stock} {unit}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="attention__group">
+                  <p className="attention__label">Mendekati kedaluwarsa</p>
+                  {expiringList.length === 0 ? (
+                    <p className="attention__empty">
+                      Tidak ada obat yang mendekati kedaluwarsa.
+                    </p>
+                  ) : (
+                    expiringList.map((medicine) => {
+                      const state = expiryState(medicine.expiry_date, now.getTime());
+                      const expiry = medicine.expiry_date
+                        ? new Date(medicine.expiry_date)
+                        : null;
+                      const dateText = expiry
+                        ? expiry.toLocaleDateString('id-ID', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                          })
+                        : '—';
+                      const daysLeft = expiry
+                        ? Math.max(
+                            1,
+                            Math.ceil((expiry.getTime() - now.getTime()) / DAY_MS)
+                          )
+                        : 0;
+                      return (
+                        <div className="attention__row" key={medicine.id}>
+                          <span className="attention__ico attention__ico--exp">
+                            <AlertTriangle className="ico" />
+                          </span>
+                          <div className="attention__main">
+                            <b>{medicine.name}</b>
+                            <small>{dateText}</small>
+                          </div>
+                          <span
+                            className={`badge attention__badge ${
+                              state === 'expired' ? 'badge--bad' : 'badge--warn'
+                            }`}
+                          >
+                            {state === 'expired' ? 'Kedaluwarsa' : `${daysLeft} hari lagi`}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </>
             )}
 
-            <div className="dash-rank__foot">
-              <span>{uniqueStudentsPeriod} siswa datang</span>
-              <span>{periodVisits.length} kunjungan</span>
+            <div className="attention__foot">
+              <Link
+                href="/inventory"
+                prefetch={false}
+                className="btn btn--ghost btn--sm attention__link"
+              >
+                Kelola inventaris <ChevronRight className="ico" />
+              </Link>
             </div>
           </section>
-          </div>
         </div>
 
         <div className="dash__split dash__split--lists">
-          <section className="card dash-visits">
-            <div className="card__head">
-              <div className="card__title">
-                <Stethoscope className="ico" />
-                <span>
-                  Kunjungan terkini
-                  <span className="card__sub">Siswa yang ditangani UKS hari ini.</span>
-                </span>
-              </div>
+          <section className="card recent">
+            <header className="card__head">
+              <h2 className="card__title">Kunjungan terkini</h2>
               <Link href="/visits" prefetch={false} className="card__link dash-link">
-                Semua <ChevronRight className="ico" />
+                Lihat semua <ChevronRight className="ico" />
               </Link>
-            </div>
+            </header>
 
             {recentVisits.length === 0 ? (
               <div className="empty">
                 <ClipboardList className="ico" />
-                <div className="empty__title">Belum ada kunjungan hari ini</div>
+                <div className="empty__title">Belum ada kunjungan</div>
                 <div className="empty__text">Kunjungan yang dicatat akan muncul di sini.</div>
                 <Link href="/visits/new" prefetch={false} className="btn btn--primary btn--sm">
                   <Plus className="ico" /> Catat kunjungan
                 </Link>
               </div>
             ) : (
-              <div className="dash-visitlist">
+              <div className="recent__table">
+                <div className="recent__head" aria-hidden="true">
+                  <span>Siswa</span>
+                  <span>Keluhan</span>
+                  <span>Waktu</span>
+                  <span>Status</span>
+                </div>
                 {recentVisits.map((visit, index) => {
                   const status = statusMap[visit.final_status ?? ''] ?? {
                     label: 'Belum diisi',
                     cls: 'badge badge--plain',
                   };
+                  const when = new Date(visit.check_in_at);
+                  const dateText = when.toLocaleDateString('id-ID', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: '2-digit',
+                  });
+                  const timeText = when.toLocaleTimeString('id-ID', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+                  const name = visit.students?.full_name ?? 'Siswa';
                   return (
-                    <div className="dash-visit" key={visit.id}>
-                      <span className="dash-visit__time">
-                        {new Date(visit.check_in_at).toLocaleTimeString('id-ID', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                      <span className={`av av--sm ${tones[index % tones.length]}`}>
-                        {(visit.students?.full_name ?? '?').charAt(0).toUpperCase()}
-                      </span>
-                      <div className="dash-visit__main">
-                        <b>{visit.students?.full_name ?? 'Siswa'}</b>
-                        <small>
-                          {visit.students?.class ?? '-'} · {visit.chief_complaint || 'Tanpa keluhan'}
-                        </small>
+                    <div className="recent__row" key={visit.id}>
+                      <div className="recent__student">
+                        <span className={`av av--sm ${tones[index % tones.length]}`}>
+                          {name.charAt(0).toUpperCase()}
+                        </span>
+                        <div className="recent__studentText">
+                          <b>{name}</b>
+                          <small>Kelas {visit.students?.class ?? '-'}</small>
+                        </div>
                       </div>
+                      <span className="recent__complaint">
+                        {visit.chief_complaint?.trim() || '—'}
+                      </span>
+                      <span className="recent__time">
+                        {dateText}, {timeText}
+                      </span>
                       <span className={status.cls}>{status.label}</span>
                     </div>
                   );
@@ -752,208 +622,34 @@ export default async function DashboardPage({
             )}
           </section>
 
-          <section className="card dash-low">
-            <div className="card__head">
-              <div className="card__title">
-                <Pill className="ico" />
-                <span>
-                  Stok menipis
-                  <span className="card__sub">Obat pada atau di bawah stok minimum.</span>
-                </span>
-              </div>
-              <Link href="/inventory" prefetch={false} className="card__link dash-link">
-                Tambah stok <ChevronRight className="ico" />
-              </Link>
-            </div>
+          <section className="card complaints">
+            <header className="card__head">
+              <h2 className="card__title">Keluhan terbanyak</h2>
+              <span className="badge badge--plain">{period.label}</span>
+            </header>
 
-            {lowStock.length === 0 ? (
+            {topComplaints.length === 0 ? (
               <div className="empty">
-                <Package className="ico" />
-                <div className="empty__title">Stok aman</div>
-                <div className="empty__text">Semua obat berada di atas batas minimum.</div>
-              </div>
-            ) : (
-              <div className="dash-low__list">
-                {lowStock.map((medicine) => {
-                  const min = medicine.min_stock ?? 5;
-                  const stock = medicine.stock ?? 0;
-                  const percent = Math.min(100, Math.round((stock / Math.max(1, min)) * 100));
-                  return (
-                    <div className="dash-low__row" key={medicine.id}>
-                      <div className="dash-low__main">
-                        <b>{medicine.name}</b>
-                        <small>
-                          {medicine.category ?? 'Tanpa kategori'} · min {min} {medicine.unit ?? 'pcs'}
-                        </small>
-                      </div>
-                      <span className="dash-low__meter">
-                        <i style={{ width: `${Math.max(5, percent)}%` }} />
-                      </span>
-                      <span className="dash-low__val">{stock}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="dash-low__foot">
-              <span>
-                <Clock className="ico" /> {expiringSoon} obat mendekati kedaluwarsa
-              </span>
-              <span>{medicines.length} jenis obat</span>
-            </div>
-          </section>
-        </div>
-
-        <div className="dash__split dash__split--bottom">
-          <section className="card dash-feed">
-            <div className="card__head">
-              <div className="card__title">
-                <Activity className="ico" />
-                <span>
-                  Aktivitas
-                  <span className="card__sub">Jejak perubahan terbaru di sekolah Anda.</span>
-                </span>
-              </div>
-              <div className="card__tools">
-                <span className="spill spill--teal">
-                  <i />
-                  Langsung
-                </span>
-                <Link href="/activity" prefetch={false} className="btn btn--ghost btn--sm">
-                  Lihat semua
-                </Link>
-              </div>
-            </div>
-
-            {activity.length === 0 ? (
-              <div className="empty">
-                <Activity className="ico" />
-                <div className="empty__title">Belum ada aktivitas</div>
+                <ClipboardList className="ico" />
+                <div className="empty__title">Belum ada keluhan</div>
                 <div className="empty__text">
-                  {activityReady
-                    ? 'Setiap perubahan data dan login akan tercatat di sini.'
-                    : 'Tabel log aktivitas belum dibuat. Jalankan database/activity_logs.sql di Supabase.'}
+                  Keluhan yang dicatat pada {period.label} terakhir akan dirangkum di sini.
                 </div>
               </div>
             ) : (
-              <div className="dash-feed__list">
-                {activity.map((item) => (
-                  <div className="dash-feed__item" key={item.id}>
-                    <span className="av av--sm av--sky">{initials(item.actor_name)}</span>
-                    <div className="dash-feed__main">
-                      <p>
-                        <b>{item.actor_name ?? 'Sistem'}</b> {item.summary}
-                      </p>
-                      <small>
-                        {timeAgo(item.created_at)} · {badgeFor(item.action)}
-                      </small>
-                    </div>
+              <div className="complaints__list">
+                {topComplaints.map((item, index) => (
+                  <div className="complaints__row" key={item.key}>
+                    <span className="complaints__rank">{index + 1}</span>
+                    <b>{item.label}</b>
+                    <span className="complaints__count">{item.count}</span>
+                    <span className="complaints__bar">
+                      <i style={{ width: `${(item.count / maxComplaint) * 100}%` }} />
+                    </span>
                   </div>
                 ))}
               </div>
             )}
-          </section>
-
-          <section className="card dash-status">
-            <div className="card__head">
-              <div className="card__title">
-                <Users className="ico" />
-                <span>
-                  Status hari ini
-                  <span className="card__sub">Sebaran hasil penanganan.</span>
-                </span>
-              </div>
-              <Link href="/visits" prefetch={false} className="card__link dash-link">
-                Semua <ChevronRight className="ico" />
-              </Link>
-            </div>
-
-            <div className="dash-status__big">
-              <CountUp value={todayCount} />
-              <small>kunjungan</small>
-            </div>
-
-            <div className="dash-status__bar" aria-hidden="true">
-              {todayCount === 0 ? (
-                <i className="dash-status__zero" />
-              ) : (
-                (['back_to_class', 'referred', 'picked_up'] as const).map((key) => {
-                  const value = todayStatus[key];
-                  if (!value) return null;
-                  return (
-                    <i
-                      key={key}
-                      style={{
-                        width: `${(value / todayStatusTotal) * 100}%`,
-                        background:
-                          key === 'back_to_class'
-                            ? 'var(--chart)'
-                            : key === 'referred'
-                              ? 'color-mix(in srgb, var(--chart) 58%, var(--surface))'
-                              : 'color-mix(in srgb, var(--chart) 30%, var(--surface))',
-                      }}
-                    />
-                  );
-                })
-              )}
-            </div>
-
-            <div className="dash-status__legend">
-              {(['back_to_class', 'referred', 'picked_up'] as const).map((key) => (
-                <div key={key}>
-                  <span className={`dot ${key === 'back_to_class' ? 'dot--good' : key === 'referred' ? 'dot--bad' : 'dot--warn'}`} />
-                  <span>{statusMap[key].label}</span>
-                  <b>{todayStatus[key]}</b>
-                </div>
-              ))}
-            </div>
-
-            <div className="dash-status__foot">
-              <span>{todayStatus.unknown} belum diisi</span>
-              <span>{todayCount ? Math.round((todayStatus.back_to_class / todayCount) * 100) : 0}% kembali ke kelas</span>
-            </div>
-          </section>
-
-          <section className="card dash-rank">
-            <div className="card__head">
-              <div className="card__title">
-                <Users className="ico" />
-                <span>
-                  Kelas paling sering
-                  <span className="card__sub">{period.label} terakhir.</span>
-                </span>
-              </div>
-            </div>
-
-            {topClasses.length === 0 ? (
-              <div className="empty">
-                <Users className="ico" />
-                <div className="empty__title">Belum ada kunjungan</div>
-                <div className="empty__text">Kunjungan {period.label} terakhir akan dirangkum per kelas di sini.</div>
-              </div>
-            ) : (
-              <div className="dash-rank__list">
-                {topClasses.map((item, index) => (
-                  <div className="dash-rank__row" key={item.klass}>
-                    <span className="dash-rank__rank">{index + 1}</span>
-                    <div className="dash-rank__main">
-                      <b>{item.klass}</b>
-                      <small>{item.students} siswa datang</small>
-                      <span className="dash-rank__bar">
-                        <i style={{ width: `${(item.visits / maxClassVisits) * 100}%` }} />
-                      </span>
-                    </div>
-                    <span className="dash-rank__val">{item.visits}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="dash-rank__foot">
-              <span>{classCount} kelas terdaftar</span>
-              <span>{periodVisits.length} kunjungan {period.label}</span>
-            </div>
           </section>
         </div>
       </div>

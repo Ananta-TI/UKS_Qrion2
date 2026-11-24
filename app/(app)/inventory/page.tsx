@@ -777,202 +777,215 @@ function InventoryPageInner() {
         </button>
       }
     >
-      <section className="kpis">
-        <div className="stat stat--dark">
-          <div className="stat__label"><span className="stat__ico"><Package className="ico" /></span>Jenis Obat</div>
-          <div className="stat__value"><CountUp value={medicines.length} /></div>
+      <section className="inv-strip" aria-label="Ringkasan inventaris">
+        <div className="inv-tile">
+          <span className="inv-tile__ico" style={{ background: 'linear-gradient(160deg, #5BDBA4, #1F9A64)' }}>
+            <Package className="ico" />
+          </span>
+          <div className="inv-tile__label">Jenis obat</div>
+          <div className="inv-tile__value"><CountUp value={medicines.length} /></div>
+          <div className="inv-tile__sub">terdaftar di UKS</div>
         </div>
-        <div className="stat stat--accent">
-          <div className="stat__label"><span className="stat__ico"><AlertTriangle className="ico" /></span>Stok Menipis</div>
-          <div className="stat__value"><CountUp value={lowStock} /></div>
+        <div className="inv-tile">
+          <span className="inv-tile__ico" style={{ background: 'linear-gradient(160deg, #FFC857, #E0902B)' }}>
+            <AlertTriangle className="ico" />
+          </span>
+          <div className="inv-tile__label">Stok menipis</div>
+          <div className="inv-tile__value"><CountUp value={lowStock} /></div>
+          <div className="inv-tile__sub">perlu segera diisi ulang</div>
         </div>
-        <div className="stat">
-          <div className="stat__label"><span className="stat__ico"><Clock className="ico" /></span>Kedaluwarsa / ≤ 30 hari</div>
-          <div className="stat__value"><CountUp value={expiring} /></div>
+        <div className="inv-tile">
+          <span className="inv-tile__ico" style={{ background: 'linear-gradient(160deg, #FF7E93, #E5384F)' }}>
+            <Clock className="ico" />
+          </span>
+          <div className="inv-tile__label">Kedaluwarsa ≤ 30 hari</div>
+          <div className="inv-tile__value"><CountUp value={expiring} /></div>
+          <div className="inv-tile__sub">periksa dan ganti</div>
         </div>
       </section>
 
-      <div className="card">
-        <div className="toolbar">
-          <div className="search" style={{ maxWidth: 320, flex: 1 }}>
-            <Search className="ico" />
-            <input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(0);
-              }}
-              placeholder="Cari obat, kategori, atau dosis…"
-              aria-label="Cari obat"
-            />
-          </div>
-          <div className="chips">
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={filter === 'all'}
-              onClick={() => {
-                setFilter('all');
-                setPage(0);
-              }}
-            >
-              Semua <b>{medicines.length}</b>
-            </button>
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={filter === 'low'}
-              onClick={() => {
-                setFilter('low');
-                setPage(0);
-              }}
-            >
-              Menipis <b>{lowStock}</b>
-            </button>
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={filter === 'expiring'}
-              onClick={() => {
-                setFilter('expiring');
-                setPage(0);
-              }}
-            >
-              Kedaluwarsa <b>{expiring}</b>
-            </button>
-          </div>
+      <div className="card inv-bar">
+        <div className="search" style={{ flex: 1, minWidth: 200 }}>
+          <Search className="ico" />
+          <input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(0);
+            }}
+            placeholder="Cari obat, kategori, atau lokasi…"
+            aria-label="Cari obat"
+          />
         </div>
-
-        <div className="toolbar" style={{ marginBottom: 12 }}>
-          <span className="muted text-xs">Urutkan</span>
-          <div className="chips" role="group" aria-label="Urutkan obat">
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={sort === 'name'}
-              onClick={() => setSort('name')}
-            >
-              Nama A–Z
-            </button>
-            <button
-              type="button"
-              className="chip"
-              aria-pressed={sort === 'expiry'}
-              onClick={() => setSort('expiry')}
-            >
-              <Clock className="ico" style={{ width: 14, height: 14 }} /> Kedaluwarsa terdekat
-            </button>
-          </div>
-          <span className="toolbar__spacer" />
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setImportOpen(true)}>
-            <Upload className="ico" /> Impor CSV
+        <div className="chips" aria-label="Filter stok">
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={filter === 'all'}
+            onClick={() => {
+              setFilter('all');
+              setPage(0);
+            }}
+          >
+            Semua <b>{medicines.length}</b>
           </button>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={exportCsv} disabled={exporting}>
-            <Download className="ico" /> {exporting ? 'Menyiapkan…' : 'Ekspor CSV'}
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={filter === 'low'}
+            onClick={() => {
+              setFilter('low');
+              setPage(0);
+            }}
+          >
+            Menipis <b>{lowStock}</b>
+          </button>
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={filter === 'expiring'}
+            onClick={() => {
+              setFilter('expiring');
+              setPage(0);
+            }}
+          >
+            Kedaluwarsa <b>{expiring}</b>
           </button>
         </div>
+        <div className="chips" role="group" aria-label="Urutkan obat">
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={sort === 'name'}
+            onClick={() => setSort('name')}
+          >
+            Nama A–Z
+          </button>
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={sort === 'expiry'}
+            onClick={() => setSort('expiry')}
+          >
+            <Clock className="ico" style={{ width: 14, height: 14 }} /> Kedaluwarsa terdekat
+          </button>
+        </div>
+        <span className="toolbar__spacer" />
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setImportOpen(true)}>
+          <Upload className="ico" /> Impor CSV
+        </button>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={exportCsv} disabled={exporting}>
+          <Download className="ico" /> {exporting ? 'Menyiapkan…' : 'Ekspor CSV'}
+        </button>
+      </div>
 
+      <div className="card inv-list">
         {loading ? (
-          <div className="empty"><Package className="ico" /><div className="empty__title">Memuat inventaris…</div></div>
-        ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Nama Obat</th>
-                  <th>Kategori</th>
-                  <th className="r">Stok</th>
-                  <th>Satuan</th>
-                  <th>Lokasi</th>
-                  <th>Kedaluwarsa</th>
-                  <th className="r">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={7}>
-                      <div className="empty">
-                        <Package className="ico" />
-                        <div className="empty__title">Tidak ada obat</div>
-                        <div className="empty__text">Ubah filter atau tambahkan obat baru.</div>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  paged.map((m) => {
-                    const low = lowOf(m);
-                    const exp = expiryWarningOf(m);
-                    return (
-                      <tr key={m.id}>
-                        <td>
-                          <button
-                            type="button"
-                            className="cellname"
-                            onClick={() => openDetail(m)}
-                            title="Lihat detail, batch, dan riwayat stok"
-                          >
-                            <b>{m.name}</b>
-                            <small>{m.dosage || ' Dosis belum diisi'}</small>
-                          </button>
-                        </td>
-                        <td className="muted">{m.category ?? '-'}</td>
-                        <td className="r">
-                          <span className={low ? 'badge badge--bad' : 'badge badge--plain'}>{m.stock}</span>
-                        </td>
-                        <td className="muted">{m.unit}</td>
-                        <td className="muted">{m.location ?? '-'}</td>
-                        <td>
-                          {m.expiry_date ? (
-                            <span style={{ color: exp ? 'var(--bad)' : 'var(--muted)', fontWeight: exp ? 700 : 500 }}>
-                              {new Date(m.expiry_date).toLocaleDateString('id-ID')}
-                            </span>
-                          ) : (
-                            <span className="muted">-</span>
-                          )}
-                        </td>
-                        <td className="r">
-                          <div className="flex items-center justify-end gap-1">
-                            <button type="button" className="btn btn--ghost btn--xs" onClick={() => addStock(m.id, 1)}>
-                              <TrendingUp className="ico" /> +1
-                            </button>
-                            <button
-                              type="button"
-                              className="ibtn"
-                              onClick={() => openAdjust(m)}
-                              aria-label={`Koreksi stok ${m.name}`}
-                              title="Koreksi stok"
-                            >
-                              <SlidersHorizontal className="ico" strokeWidth={1.7} />
-                            </button>
-                            <button
-                              type="button"
-                              className="ibtn"
-                              onClick={() => openEdit(m)}
-                              aria-label={`Edit ${m.name}`}
-                              title="Edit obat"
-                            >
-                              <Pencil className="ico" strokeWidth={1.7} />
-                            </button>
-                            <button
-                              type="button"
-                              className="ibtn"
-                              onClick={() => removeMedicine(m)}
-                              aria-label={`Hapus ${m.name}`}
-                              title="Hapus obat"
-                              style={{ color: 'var(--bad)' }}
-                            >
-                              <Trash2 className="ico" strokeWidth={1.7} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+          <div className="empty">
+            <Package className="ico" />
+            <div className="empty__title">Memuat inventaris…</div>
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="empty">
+            <Package className="ico" />
+            <div className="empty__title">Tidak ada obat</div>
+            <div className="empty__text">Ubah filter atau tambahkan obat baru.</div>
+          </div>
+        ) : (
+          <>
+            <div className="inv-row inv-row--head" aria-hidden="true">
+              <span />
+              <span>Nama obat</span>
+              <span>Stok</span>
+              <span>Lokasi</span>
+              <span>Kedaluwarsa</span>
+              <span>Aksi</span>
+            </div>
+            {paged.map((m) => {
+              const low = lowOf(m);
+              const exp = expiryWarningOf(m);
+              const pc = Math.max(4, Math.min(100, Math.round(((m.stock ?? 0) / Math.max(1, (m.min_stock ?? 5) * 3)) * 100)));
+              return (
+                <div className="inv-row" key={m.id}>
+                  <span className="inv-row__ico">
+                    <Pill className="ico" />
+                  </span>
+                  <div className="inv-row__name">
+                    <button
+                      type="button"
+                      className="cellname"
+                      onClick={() => openDetail(m)}
+                      title="Lihat detail, batch, dan riwayat stok"
+                    >
+                      <b>{m.name}</b>
+                      <small>{m.dosage || 'Dosis belum diisi'}</small>
+                    </button>
+                    <span className="muted text-xs">{m.category ?? '-'}</span>
+                  </div>
+                  <div className="inv-row__stock">
+                    <div className="inv-row__stockval">
+                      <b>{m.stock}</b> {m.unit}
+                      {low && <span className="badge badge--bad" style={{ marginLeft: 6 }}>Menipis</span>}
+                    </div>
+                    <div className="meter">
+                      <i
+                        style={{
+                          width: `${pc}%`,
+                          background: low
+                            ? 'linear-gradient(90deg, #FF7E93, #E5384F)'
+                            : 'linear-gradient(90deg, #5BDBA4, #1F9A64)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="inv-row__loc">{m.location ?? '-'}</div>
+                  <div className={`inv-row__exp${exp ? ' is-warn' : ''}`}>
+                    {m.expiry_date ? new Date(m.expiry_date).toLocaleDateString('id-ID') : '—'}
+                    {exp && (
+                      <span>
+                        {Math.ceil((new Date(m.expiry_date as string).getTime() - now) / (24 * 60 * 60 * 1000)) < 0
+                          ? 'Sudah kedaluwarsa'
+                          : `${Math.max(1, Math.ceil((new Date(m.expiry_date as string).getTime() - now) / (24 * 60 * 60 * 1000)))} hari lagi`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="inv-row__actions">
+                    <button type="button" className="btn btn--ghost btn--xs" onClick={() => addStock(m.id, 1)}>
+                      <TrendingUp className="ico" /> +1
+                    </button>
+                    <button
+                      type="button"
+                      className="ibtn"
+                      onClick={() => openAdjust(m)}
+                      aria-label={`Koreksi stok ${m.name}`}
+                      title="Koreksi stok"
+                    >
+                      <SlidersHorizontal className="ico" strokeWidth={1.7} />
+                    </button>
+                    <button
+                      type="button"
+                      className="ibtn"
+                      onClick={() => openEdit(m)}
+                      aria-label={`Edit ${m.name}`}
+                      title="Edit obat"
+                    >
+                      <Pencil className="ico" strokeWidth={1.7} />
+                    </button>
+                    <button
+                      type="button"
+                      className="ibtn"
+                      onClick={() => removeMedicine(m)}
+                      aria-label={`Hapus ${m.name}`}
+                      title="Hapus obat"
+                      style={{ color: 'var(--bad)' }}
+                    >
+                      <Trash2 className="ico" strokeWidth={1.7} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </>
         )}
       </div>
 

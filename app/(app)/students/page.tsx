@@ -389,7 +389,7 @@ export default function StudentsPage() {
             <div key={s.id} className="card">
               <div className="flex items-start justify-between gap-2">
                 <Link
-                  href={`/students/${s.id}`}
+                  href={`/visits/${s.id}`}
                   prefetch={false}
                   className="flex items-center gap-3 min-w-0"
                   title={`Lihat detail ${s.full_name}`}
@@ -477,7 +477,7 @@ export default function StudentsPage() {
                 <Link href={`/visits/new?student=${s.id}`} prefetch={false} className="btn btn--ghost btn--sm grow">
                   <Stethoscope className="ico" /> Catat Kunjungan
                 </Link>
-                <Link href={`/students/${s.id}`} prefetch={false} className="btn btn--soft btn--sm">
+                <Link href={`/visits/${s.id}`} prefetch={false} className="btn btn--soft btn--sm">
                   Detail
                 </Link>
               </div>
@@ -493,7 +493,7 @@ export default function StudentsPage() {
                   {s.full_name.charAt(0).toUpperCase()}
                 </span>
                 <div className="min-w-0">
-                  <Link href={`/students/${s.id}`} prefetch={false} className="slist__name" title={`Lihat detail ${s.full_name}`}>
+                  <Link href={`/visits/${s.id}`} prefetch={false} className="slist__name" title={`Lihat detail ${s.full_name}`}>
                     {s.full_name}
                     <Chevron className="ico muted" style={{ width: 14, height: 14, flex: 'none' }} />
                   </Link>

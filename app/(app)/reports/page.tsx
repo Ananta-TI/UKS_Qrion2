@@ -407,6 +407,9 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangeKey>(defaultRange.key);
   const [query, setQuery] = useState('');
+  const [classFilter, setClassFilter] = useState('');
+  const [ck, setCk] = useState([true, true, true, true]);
+  const [lan, setLan] = useState(false);
   const [tab, setTab] = useState<Tab>('overview');
 
   const [metric, setMetric] = useState<Metric>('visits');
@@ -891,649 +894,244 @@ export default function ReportsPage() {
   }
 
   return (
-    <AppShell
-      title="Laporan"
-      crumbs={[{ label: 'UKS', href: '/' }, { label: 'Laporan' }]}
-      actions={
-        <>
-          <button type="button" className="btn btn--ghost" onClick={exportExcel}>
-            <Download className="ico" /> Excel
-          </button>
-          <button type="button" className="btn btn--primary" onClick={exportPDF}>
-            <FileText className="ico" /> PDF
-          </button>
-        </>
-      }
-    >
-      <div className="rpt__bar">
-        <LayoutGroup id="rpt-tabs">
-          <div className="rpt__tabs" role="tablist" aria-label="Mode laporan">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'overview'}
-              className={tab === 'overview' ? 'rpt__tab is-active' : 'rpt__tab'}
-              onClick={() => setTab('overview')}
-            >
-              {tab === 'overview' && (
-                <motion.span
-                  layoutId="rpt-tab-pill"
-                  className="rpt__pill"
-                  transition={pillSpring}
-                  initial={false}
-                />
-              )}
-              <span className="rpt__z">Ringkasan</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'builder'}
-              className={tab === 'builder' ? 'rpt__tab is-active' : 'rpt__tab'}
-              onClick={() => setTab('builder')}
-            >
-              {tab === 'builder' && (
-                <motion.span
-                  layoutId="rpt-tab-pill"
-                  className="rpt__pill"
-                  transition={pillSpring}
-                  initial={false}
-                />
-              )}
-              <span className="rpt__z">Pembuat Laporan</span>
-            </button>
+  <AppShell
+    title="Laporan"
+    crumbs={[{ label: 'UKS', href: '/' }, { label: 'Laporan' }]}
+    actions={
+      <>
+        <button type="button" className="btn btn--ghost" onClick={exportExcel}>
+          <Download className="ico" /> Excel
+        </button>
+        <button type="button" className="btn btn--primary" onClick={exportPDF}>
+          <FileText className="ico" /> PDF
+        </button>
+      </>
+    }
+  >
+    <div className="rpt__layout">
+      <aside className="rpt__control">
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">
+              <BarChart3 className="ico" /> Atur laporan
+            </h2>
           </div>
-        </LayoutGroup>
 
-        <LayoutGroup id="rpt-range">
-          <div className="chips rpt__ranges">
-            {ranges.map((r) => (
+          <div className="rpt__plabel">Periode</div>
+          <LayoutGroup id="rpt-range">
+            <div className="chips rpt__ranges" style={{ flexWrap: 'wrap' }}>
+              {ranges.map((r) => (
+                <button
+                  key={r.key}
+                  type="button"
+                  className="chip rpt__range"
+                  aria-pressed={range === r.key}
+                  onClick={() => setRange(r.key)}
+                >
+                  {range === r.key && (
+                    <motion.span
+                      layoutId="rpt-range-pill"
+                      className="rpt__chippill"
+                      transition={pillSpring}
+                      initial={false}
+                    />
+                  )}
+                  <span className="rpt__z">{r.label}</span>
+                </button>
+              ))}
+            </div>
+          </LayoutGroup>
+
+          <div className="rpt__plabel" style={{ marginTop: 14 }}>Isi laporan</div>
+          <div className="glist">
+            {[
+              ['Ringkasan kunjungan', 'Angka utama, tren, status akhir, keluhan'],
+              ['Rincian kunjungan', 'Waktu, siswa, keluhan, status'],
+              ['Pemakaian obat & stok', 'Obat paling sering diberikan, stok menipis'],
+              ['Siswa paling sering berkunjung', 'Peringkat siswa'],
+            ].map((r, i) => (
               <button
-                key={r.key}
+                key={i}
                 type="button"
-                className="chip rpt__range"
-                aria-pressed={range === r.key}
-                onClick={() => setRange(r.key)}
+                className="gi"
+                role="switch"
+                aria-checked={ck[i]}
+                onClick={() => {
+                  const next = [...ck];
+                  next[i] = !next[i];
+                  setCk(next);
+                }}
               >
-                {range === r.key && (
-                  <motion.span
-                    layoutId="rpt-range-pill"
-                    className="rpt__chippill"
-                    transition={pillSpring}
-                    initial={false}
-                  />
-                )}
-                <span className="rpt__z">{r.label}</span>
+                <div className="gt">
+                  <b>{r[0]}</b>
+                  <span>{r[1]}</span>
+                </div>
+                <span className="sw2" style={{ marginLeft: 'auto' }} />
               </button>
             ))}
+            <button
+              type="button"
+              className="gi"
+              role="switch"
+              aria-checked={lan}
+              onClick={() => setLan(!lan)}
+            >
+              <div className="gt">
+                <b>Samarkan nama siswa</b>
+                <span>Tampilkan inisial, untuk laporan yang dibagikan keluar</span>
+              </div>
+              <span className="sw2" style={{ marginLeft: 'auto' }} />
+            </button>
           </div>
-        </LayoutGroup>
-      </div>
 
-      {loading ? (
-        <div className="card">
-          <div className="empty">
-            <BarChart3 className="ico" />
-            <div className="empty__title">Memuat laporan…</div>
+          <div className="rpt__pactions" style={{ marginTop: 16 }}>
+            <button type="button" className="btn btn--primary btn--sm" onClick={exportExcel}>
+              <Download className="ico" /> Unduh Excel
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={exportPDF}>
+              <FileText className="ico" /> Unduh PDF
+            </button>
           </div>
         </div>
-      ) : tab === 'overview' ? (
-        <>
-          <section className="rpt__kpis">
-            <div className="rpt__kpi rpt__kpi--dark">
-              <div className="rpt__kpi-label">
-                <ClipboardList className="ico" /> Total kunjungan
-              </div>
-              <div className="rpt__kpi-row">
-                <div className="rpt__kpi-value"><CountUp value={total} /></div>
-                <Sparkline values={kpiTrend.total} tone="on-ink" />
-              </div>
-              <div className="rpt__kpi-foot">{rangeInfo.label} terakhir</div>
+
+      </aside>
+
+      <div className="rpt__preview">
+        <article className="rpt__sheet" aria-label="Pratinjau laporan">
+          <div className="rpt__shh">
+            <div>
+              <div className="rpt__shk">Pratinjau laporan</div>
+              <h2>Laporan Kunjungan UKS</h2>
+              <div className="rpt__shs">UKS</div>
             </div>
-
-            <div className="rpt__kpi rpt__kpi--accent">
-              <div className="rpt__kpi-label">
-                <Users className="ico" /> Siswa dilayani
-              </div>
-              <div className="rpt__kpi-row">
-                <div className="rpt__kpi-value"><CountUp value={uniqueStudents} /></div>
-                <Sparkline values={kpiTrend.students} tone="on-accent" />
-              </div>
-              <div className="rpt__kpi-foot">siswa berbeda</div>
-            </div>
-
-            <div className="rpt__kpi">
-              <div className="rpt__kpi-label">
-                <Ambulance className="ico" /> Dirujuk
-              </div>
-              <div className="rpt__kpi-row">
-                <div className="rpt__kpi-value"><CountUp value={referred} /></div>
-                <Sparkline values={kpiTrend.referred} tone="bad" />
-              </div>
-              <div className="rpt__kpi-foot">
-                <CountUp value={referralRate} suffix="%" /> dari <CountUp value={total} /> kunjungan · butuh penanganan lanjut
-              </div>
-            </div>
-
-            <div className="rpt__kpi">
-              <div className="rpt__kpi-label">
-                <CheckCircle2 className="ico" /> Kembali ke kelas
-              </div>
-              <div className="rpt__kpi-row">
-                <div className="rpt__kpi-value"><CountUp value={returnRate} suffix="%" /></div>
-                <Sparkline values={kpiTrend.returnRate} />
-              </div>
-              <div className="rpt__kpi-foot"><CountUp value={returned} /> dari <CountUp value={total} /> kunjungan</div>
-            </div>
-          </section>
-
-          <div className="rpt__grid rpt__grid--main">
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">
-                  <BarChart3 className="ico" /> {trendTitle}
-                </h2>
-                <span className="rpt__datepill">{rangeInfo.label}</span>
-              </div>
-              <AreaChart data={trend} />
-            </div>
-
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">
-                  <CheckCircle2 className="ico" /> Status Akhir
-                </h2>
-                <span className="spill spill--teal">
-                  <i /> <CountUp value={total} /> kunjungan
-                </span>
-              </div>
-
-              <Gauge pct={returnRate} />
-
-              <div className="rpt__status">
-                {Object.entries(statusCounts).length === 0 ? (
-                  <div className="empty" style={{ padding: '12px 4px' }}>
-                    <div className="empty__text">Belum ada data status.</div>
-                  </div>
-                ) : (
-                  Object.entries(statusCounts).map(([status, count]) => {
-                    const info = statusMap[status] ?? {
-                      label: visitStatusLabel(status === 'unknown' ? null : status),
-                      color: 'var(--faint)',
-                    };
-                    const pct = total ? Math.round((count / total) * 100) : 0;
-                    return (
-                      <div key={status} className="rpt__statusrow">
-                        <span className="rpt__statuslabel">
-                          <span className="dot" style={{ background: info.color }} />
-                          {info.label}
-                        </span>
-                        <span className="rpt__statusval">
-                          <CountUp value={count} /> <small>· <CountUp value={pct} suffix="%" /></small>
-                        </span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+            <div className="rpt__shm">
+              <span>Periode</span>
+              <b>{rangeInfo.label}</b>
+              <span>Total</span>
+              <b>{total} kunjungan</b>
             </div>
           </div>
 
-          <div className="rpt__grid rpt__grid--split">
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">
-                  <Users className="ico" /> Kunjungan per Kelas
-                </h2>
-              </div>
-              {byClass.length === 0 ? (
-                <div className="empty">
-                  <div className="empty__text">Belum ada data kelas pada periode ini.</div>
+          {ck[0] && (
+            <section className="rpt__rs">
+              <h3>Ringkasan kunjungan</h3>
+              <div className="rpt__rk">
+                <div>
+                  <span>Total kunjungan</span>
+                  <b><CountUp value={total} /></b>
+                  <small>{rangeInfo.label} terakhir</small>
                 </div>
-              ) : (
-                <BarsChart data={byClass} />
-              )}
-            </div>
-
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">
-                  <Stethoscope className="ico" /> Keluhan Terbanyak
-                </h2>
-                <span className="spill spill--iris">
-                  <i /> <CountUp value={complaints.length} /> teratas
-                </span>
+                <div>
+                  <span>Siswa dilayani</span>
+                  <b><CountUp value={uniqueStudents} /></b>
+                  <small>siswa berbeda</small>
+                </div>
+                <div>
+                  <span>Dirujuk</span>
+                  <b><CountUp value={referred} /></b>
+                  <small>{referralRate}% dari seluruh kunjungan</small>
+                </div>
+                <div>
+                  <span>Kembali ke kelas</span>
+                  <b>{returnRate}%</b>
+                  <small>{returned} kunjungan</small>
+                </div>
               </div>
 
-              {complaints.length === 0 ? (
-                <div className="empty">
-                  <div className="empty__text">Belum ada data keluhan pada periode ini.</div>
-                </div>
-              ) : (
-                <div className="rpt__lead">
-                  {complaints.map((c, i) => (
-                    <div key={c.key} className="rpt__lrow">
-                      <span className="rpt__lrank">{i + 1}</span>
-                      <span className="rpt__ltext">
-                        <b>{c.label}</b>
-                        <small><CountUp value={c.value} /> kunjungan</small>
-                      </span>
-                      <span className="rpt__lbar">
-                        <span
-                          className="rpt__lfill"
-                          style={{
-                            width: `${(c.value / maxComplaint) * 100}%`,
-                            animationDelay: `${i * 55}ms`,
-                          }}
-                        />
-                      </span>
-                      <span className="rpt__lval"><CountUp value={c.value} /></span>
+              <div className="rpt__rg2">
+                <div>
+                  <h4>Status akhir</h4>
+                  {Object.entries(statusCounts).length === 0 ? (
+                    <div className="empty" style={{ padding: '12px 4px' }}>
+                      <div className="empty__text">Belum ada data status.</div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="rpt__grid rpt__grid--split">
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">
-                  <Pill className="ico" /> Pergerakan Stok Obat
-                </h2>
-                <div className="card__tools">
-                  <span className="spill spill--teal">
-                    <i /> <CountUp value={medInTotal} /> masuk
-                  </span>
-                  <span className="spill spill--rose">
-                    <i /> <CountUp value={medOutTotal} /> keluar
-                  </span>
-                </div>
-              </div>
-              {medInTotal + medOutTotal === 0 ? (
-                <div className="empty">
-                  <div className="empty__text">Belum ada pergerakan stok obat pada periode ini.</div>
-                </div>
-              ) : (
-                <MedicineMoveChart data={medMovement} />
-              )}
-            </div>
-
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">
-                  <Pill className="ico" /> Obat Paling Sering Diberikan
-                </h2>
-                <span className="spill spill--iris">
-                  <i /> <CountUp value={medRanking.length} /> teratas
-                </span>
-              </div>
-
-              {medRanking.length === 0 ? (
-                <div className="empty">
-                  <div className="empty__text">Belum ada obat yang diberikan pada periode ini.</div>
-                </div>
-              ) : (
-                <div className="rpt__lead">
-                  {medRanking.map((m, i) => (
-                    <div key={`${m.name}-${i}`} className="rpt__lrow">
-                      <span className="rpt__lrank">{i + 1}</span>
-                      <span className="rpt__ltext">
-                        <b>{m.name}</b>
-                        <small>
-                          masuk {m.masuk} · keluar {m.keluar}
-                        </small>
-                      </span>
-                      <span className="rpt__lbar">
-                        <span
-                          className="rpt__lfill"
-                          style={{ width: `${(m.keluar / medMaxOut) * 100}%`, animationDelay: `${i * 55}ms` }}
-                        />
-                      </span>
-                      <span className="rpt__lval"><CountUp value={m.keluar} /></span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card__head">
-              <h2 className="card__title">
-                <Users className="ico" /> Siswa Paling Sering Berkunjung
-              </h2>
-              <div className="card__tools">
-                <div className="search" style={{ height: 34, minWidth: 220 }}>
-                  <Users className="ico" />
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Cari nama atau NIS…"
-                    aria-label="Cari siswa dalam laporan"
-                  />
-                </div>
-                <span className="spill spill--iris">
-                  <i /> <CountUp value={topStudents.length} /> siswa
-                </span>
-              </div>
-            </div>
-
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Siswa</th>
-                    <th>Kelas</th>
-                    <th className="r">Kunjungan</th>
-                    <th>Relatif</th>
-                    <th className="r">Porsi</th>
-                  </tr>
-                </thead>
-                <tbody key={topSignature}>
-                  {topStudents.length === 0 ? (
-                    <tr>
-                      <td colSpan={6}>
-                        <div className="empty">
-                          <Users className="ico" />
-                          <div className="empty__title">Belum ada data</div>
-                          <div className="empty__text">
-                            {query ? 'Tidak ada siswa yang cocok dengan pencarian.' : 'Tidak ada kunjungan pada periode ini.'}
+                  ) : (
+                    Object.entries(statusCounts).map(([status, count]) => {
+                      const info = statusMap[status] ?? {
+                        label: visitStatusLabel(status === 'unknown' ? null : status),
+                        color: 'var(--faint)',
+                      };
+                      const pct = total ? Math.round((count / total) * 100) : 0;
+                      return (
+                        <div key={status} className="rpt__rb">
+                          <div className="rpt__rbt">
+                            <span><i style={{ background: info.color }} />{info.label}</span>
+                            <b>{count} · {pct}%</b>
+                          </div>
+                          <div className="meter">
+                            <i style={{ width: `${pct}%`, background: info.color }} />
                           </div>
                         </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    topStudents.map((s, i) => {
-                      const share = total ? (s.count / total) * 100 : 0;
-                      return (
-                        <tr key={s.id}>
-                          <td className="muted">{i + 1}</td>
-                          <td>
-                            <b>{s.name}</b>
-                            <div className="muted text-xs">NIS {s.nis}</div>
-                          </td>
-                          <td className="muted">{s.klass}</td>
-                          <td className="r"><CountUp value={s.count} /></td>
-                          <td style={{ minWidth: 180 }}>
-                            <span className="rpt__strack">
-                              <span
-                                className="rpt__sfill"
-                                style={{
-                                  width: `${(s.count / maxStudentVisits) * 100}%`,
-                                  animationDelay: `${i * 40}ms`,
-                                }}
-                              />
-                            </span>
-                          </td>
-                          <td className="r muted"><CountUp value={share} decimals={1} suffix="%" /></td>
-                        </tr>
                       );
                     })
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="rpt__builder">
-          <aside className="rpt__panel">
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">
-                  <BarChart3 className="ico" /> Buat Laporan
-                </h2>
-              </div>
-
-              <div className="rpt__plabel">Metrik</div>
-              <div className="rpt__metrics">
-                {metrics.map((m) => {
-                  const Icon = m.icon;
-                  const active = metric === m.key;
-                  return (
-                    <button
-                      key={m.key}
-                      type="button"
-                      className={active ? 'rpt__metric is-active' : 'rpt__metric'}
-                      aria-pressed={active}
-                      onClick={() => chooseMetric(m.key)}
-                    >
-                      <span className="rpt__mico">
-                        <Icon className="ico" strokeWidth={1.7} />
-                      </span>
-                      <span className="rpt__mtext">
-                        <b>{m.label}</b>
-                        <small>{m.desc}</small>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="rpt__plabel">Kelompokkan</div>
-              <LayoutGroup id="rpt-group">
-                <div className="rpt__seg">
-                  {groupOptions.map((g) => (
-                    <button
-                      key={g.key}
-                      type="button"
-                      className={groupBy === g.key ? 'is-active' : ''}
-                      aria-pressed={groupBy === g.key}
-                      onClick={() => chooseGroup(g.key)}
-                    >
-                      {groupBy === g.key && (
-                        <motion.span
-                          layoutId="rpt-group-pill"
-                          className="rpt__segpill"
-                          transition={pillSpring}
-                          initial={false}
-                        />
-                      )}
-                      <span className="rpt__z">{g.label}</span>
-                    </button>
-                  ))}
                 </div>
-              </LayoutGroup>
-
-              <div className="rpt__plabel">Grafik</div>
-              <LayoutGroup id="rpt-chart">
-                <div className="rpt__seg">
-                  <button
-                    type="button"
-                    className={chart === 'area' ? 'is-active' : ''}
-                    aria-pressed={chart === 'area'}
-                    disabled={areaDisabled}
-                    title={areaDisabled ? 'Area tidak cocok untuk data ini. Gunakan Batang.' : undefined}
-                    onClick={() => setChart('area')}
-                  >
-                    {chart === 'area' && !areaDisabled && (
-                      <motion.span
-                        layoutId="rpt-chart-pill"
-                        className="rpt__segpill"
-                        transition={pillSpring}
-                        initial={false}
-                      />
-                    )}
-                    <span className="rpt__z">Area</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={chart === 'bars' ? 'is-active' : ''}
-                    aria-pressed={chart === 'bars'}
-                    onClick={() => setChart('bars')}
-                  >
-                    {chart === 'bars' && (
-                      <motion.span
-                        layoutId="rpt-chart-pill"
-                        className="rpt__segpill"
-                        transition={pillSpring}
-                        initial={false}
-                      />
-                    )}
-                    <span className="rpt__z">Batang</span>
-                  </button>
-                </div>
-              </LayoutGroup>
-              {areaDisabled && (
-                <div className="rpt__tiny">
-                  Area dinonaktifkan untuk {groupBy === 'medicine' ? 'data per obat' : 'keluhan'} — otomatis memakai
-                  Batang.
-                </div>
-              )}
-
-              <div className="rpt__pactions">
-                <button type="button" className="btn btn--primary btn--sm" onClick={saveReport}>
-                  <Star className="ico" /> Simpan
-                </button>
-                <button type="button" className="btn btn--ghost btn--sm" onClick={exportBuilderCSV}>
-                  <Download className="ico" /> CSV
-                </button>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">
-                  <Star className="ico" /> Laporan Tersimpan
-                </h2>
-                <div className="card__tools">
-                  <span
-                    className="spill spill--iris"
-                    title={
-                      savedSource === 'server'
-                        ? 'Tersimpan di server — bisa dilihat staf lain sekolah ini.'
-                        : 'Tabel saved_reports belum ada — laporan hanya tersimpan di peramban ini.'
-                    }
-                  >
-                    <i /> {savedSource === 'server' ? 'Server' : 'Lokal'}
-                  </span>
-                  <span className="badge badge--plain"><CountUp value={saved.length} /></span>
-                </div>
-              </div>
-
-              {saved.length === 0 ? (
-                <div className="empty" style={{ padding: '18px 6px' }}>
-                  <div className="empty__text">Belum ada laporan tersimpan. Atur metrik lalu klik Simpan.</div>
-                </div>
-              ) : (
-                <div className="rpt__saved">
-                  {saved.map((s) => {
-                    const info = metrics.find((m) => m.key === s.metric) ?? metrics[0];
-                    return (
-                      <div key={s.id} className="rpt__sitem">
-                        <button type="button" className="rpt__sload" onClick={() => applyReport(s)}>
-                          <span className="rpt__mico">
-                            <info.icon className="ico" strokeWidth={1.7} />
-                          </span>
-                          <span className="rpt__mtext">
-                            <b>{s.name}</b>
-                            <small>
-                              {info.label} · {groupOptions.find((g) => g.key === s.groupBy)?.label} ·{' '}
-                              {new Date(s.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                            </small>
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          className="ibtn"
-                          onClick={() => deleteReport(s.id)}
-                          aria-label={`Hapus ${s.name}`}
-                          title="Hapus laporan"
-                          style={{ color: 'var(--bad)', width: 30, height: 30 }}
-                        >
-                          <Trash2 className="ico" strokeWidth={1.7} />
-                        </button>
+                <div>
+                  <h4>Keluhan terbanyak</h4>
+                  {complaints.length === 0 ? (
+                    <p className="rpt__empty">Tidak ada data.</p>
+                  ) : (
+                    complaints.map((c) => (
+                      <div key={c.key} className="rpt__rb">
+                        <div className="rpt__rbt">
+                          <span style={{ textTransform: 'capitalize' }}>{c.label}</span>
+                          <b>{c.value}</b>
+                        </div>
+                        <div className="meter">
+                          <i style={{ width: `${(c.value / maxComplaint) * 100}%`, background: 'linear-gradient(90deg, #5BDBA4, #1F9A64)' }} />
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </aside>
-
-          <div className="rpt__canvas">
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">
-                  <BarChart3 className="ico" /> {metricInfo.label} per {groupInfo.label}
-                </h2>
-                <span className="rpt__datepill">
-                  <CalendarDays className="ico" /> {rangeInfo.label}
-                </span>
-              </div>
-
-              <div className="rpt__mini">
-                <div>
-                  <small>Total</small>
-                  <b><CountUp value={builderTotal} /></b>
-                </div>
-                <div>
-                  <small>Tertinggi</small>
-                  <b><CountUp value={highest?.value ?? 0} /></b>
-                  <span>{highest?.label ?? '-'}</span>
-                </div>
-                <div>
-                  <small>Terendah</small>
-                  <b><CountUp value={lowest?.value ?? 0} /></b>
-                  <span>{lowest?.label ?? '-'}</span>
+                    ))
+                  )}
                 </div>
               </div>
 
-              {builderGroups.length === 0 ? (
-                <div className="empty">
-                  <BarChart3 className="ico" />
-                  <div className="empty__title">Belum ada data</div>
-                  <div className="empty__text">
-                    {isMedicineMetric
-                      ? 'Tidak ada pergerakan obat pada periode ini.'
-                      : 'Tidak ada kunjungan pada periode ini.'}
-                  </div>
-                </div>
-              ) : chart === 'area' ? (
-                <AreaChart data={builderGroups} />
+              <h4 style={{ marginTop: 20 }}>Tren kunjungan</h4>
+              {trend.length > 1 ? (
+                <ReportAreaChart data={trend} />
               ) : (
-                <BarsChart data={builderGroups} />
+                <p className="rpt__empty">Periode terlalu pendek untuk menampilkan tren.</p>
               )}
 
-              {builderGroups.length > 0 && (
-                <div className="table-wrap" style={{ marginTop: 18 }}>
+              <h4 style={{ marginTop: 20 }}>Kunjungan per kelas</h4>
+              {byClass.length === 0 ? (
+                <p className="rpt__empty">Tidak ada data kelas pada periode ini.</p>
+              ) : (
+                <BarsChart data={byClass} />
+              )}
+            </section>
+          )}
+
+          {ck[1] && (
+            <section className="rpt__rs">
+              <h3>Rincian kunjungan</h3>
+              {total === 0 ? (
+                <p className="rpt__empty">Tidak ada kunjungan pada periode ini.</p>
+              ) : (
+                <div className="table-wrap">
                   <table className="table">
                     <thead>
                       <tr>
-                        <th>#</th>
-                        <th>{groupInfo.label}</th>
-                        <th className="r">{metricInfo.label}</th>
-                        <th>Relatif</th>
-                        <th className="r">Porsi</th>
+                        <th>Tanggal</th>
+                        <th>Siswa</th>
+                        <th>Kelas</th>
+                        <th>Keluhan</th>
+                        <th>Status</th>
                       </tr>
                     </thead>
-                    <tbody key={builderSignature}>
-                      {builderGroups.map((g, i) => (
-                        <tr key={g.key}>
-                          <td className="muted">{i + 1}</td>
+                    <tbody>
+                      {filtered.slice(0, 8).map((v) => (
+                        <tr key={v.id}>
+                          <td className="muted whitespace-nowrap">
+                            {new Date(v.check_in_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: '2-digit' })}
+                          </td>
+                          <td><b>{lan ? v.students?.full_name?.split(' ').map((w) => w[0] + '.').join(' ') : v.students?.full_name ?? '-'}</b></td>
+                          <td className="muted">{v.students?.class ?? '-'}</td>
+                          <td className="muted" style={{ textTransform: 'capitalize' }}>{v.chief_complaint ?? '-'}</td>
                           <td>
-                            <b>{g.label}</b>
-                          </td>
-                          <td className="r"><CountUp value={g.value} /></td>
-                          <td style={{ minWidth: 200 }}>
-                            <span className="rpt__strack">
-                              <span
-                                className="rpt__sfill"
-                                style={{
-                                  width: `${(g.value / builderMax) * 100}%`,
-                                  animationDelay: `${i * 40}ms`,
-                                }}
-                              />
+                            <span className={statusMap[v.final_status ?? '']?.cls ?? 'badge badge--plain'}>
+                              {visitStatusLabel(v.final_status)}
                             </span>
-                          </td>
-                          <td className="r muted">
-                            <CountUp
-                              value={builderTotal ? (g.value / builderTotal) * 100 : 0}
-                              decimals={1}
-                              suffix="%"
-                            />
                           </td>
                         </tr>
                       ))}
@@ -1541,17 +1139,100 @@ export default function ReportsPage() {
                   </table>
                 </div>
               )}
+              {total > 8 && <p className="rpt__note">dan {total - 8} kunjungan lainnya (lengkap di berkas unduhan)</p>}
+            </section>
+          )}
 
-              <div className="rpt__hint">
-                <ArrowUpRight className="ico" />
-                <span>
-                  Data mengikuti periode <b>{rangeInfo.label}</b>. Atur metrik dan pengelompokan di panel kiri.
-                </span>
+          {ck[2] && (
+            <section className="rpt__rs">
+              <h3>Pemakaian obat &amp; stok</h3>
+              <div className="rpt__rg2">
+                <div>
+                  <h4>Obat paling sering diberikan</h4>
+                  {medRanking.length === 0 ? (
+                    <p className="rpt__empty">Tidak ada obat yang diberikan pada periode ini.</p>
+                  ) : (
+                    medRanking.map((m, i) => (
+                      <div key={`${m.name}-${i}`} className="rpt__rb">
+                        <div className="rpt__rbt">
+                          <span>{m.name}</span>
+                          <b>{m.keluar}×</b>
+                        </div>
+                        <div className="meter">
+                          <i style={{ width: `${(m.keluar / medMaxOut) * 100}%`, background: 'linear-gradient(90deg, #5BDBA4, #1F9A64)' }} />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div>
+                  <h4>Stok menipis ({medicines.filter((m) => (m.stock ?? 0) <= (m.min_stock ?? 5)).length})</h4>
+                  {medicines.filter((m) => (m.stock ?? 0) <= (m.min_stock ?? 5)).length === 0 ? (
+                    <p className="rpt__empty">Semua stok aman.</p>
+                  ) : (
+                    medicines.filter((m) => (m.stock ?? 0) <= (m.min_stock ?? 5)).slice(0, 6).map((m) => (
+                      <div key={m.id} className="rpt__rbt" style={{ padding: '6px 0' }}>
+                        <span>{m.name}</span>
+                        <b style={{ color: 'var(--bad)' }}>
+                          {m.stock} {m.unit} <small style={{ color: 'var(--muted)', fontWeight: 600 }}>/ min {m.min_stock ?? 5}</small>
+                        </b>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
+            </section>
+          )}
+
+          {ck[3] && (
+            <section className="rpt__rs">
+              <h3>Siswa paling sering berkunjung</h3>
+              {topStudents.length === 0 ? (
+                <p className="rpt__empty">Tidak ada data.</p>
+              ) : (
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Siswa</th>
+                        <th>Kelas</th>
+                        <th className="r">Kunjungan</th>
+                        <th className="r">Porsi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topStudents.map((s, i) => {
+                        const share = total ? (s.count / total) * 100 : 0;
+                        return (
+                          <tr key={s.id}>
+                            <td className="muted">{i + 1}</td>
+                            <td>
+                              <b>{lan ? s.name.split(' ').map((w) => w[0] + '.').join(' ') : s.name}</b>
+                              <div className="muted text-xs">NIS {s.nis}</div>
+                            </td>
+                            <td className="muted">{s.klass}</td>
+                            <td className="r"><CountUp value={s.count} /></td>
+                            <td className="r muted"><CountUp value={share} decimals={1} suffix="%" /></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          {!ck.some(Boolean) && (
+            <div className="empty">
+              <div className="empty__text">Pilih minimal satu isi laporan di panel kiri.</div>
             </div>
-          </div>
-        </div>
-      )}
-    </AppShell>
-  );
+          )}
+        </article>
+      </div>
+    </div>
+  </AppShell>
+);
+
 }

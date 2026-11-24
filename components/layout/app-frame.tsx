@@ -32,7 +32,7 @@ const pillSpring = { type: 'spring', stiffness: 380, damping: 32, mass: 0.7 } as
 
 const tabs = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/students', label: 'Siswa', icon: Users },
+  // { href: '/students', label: 'Siswa', icon: Users },
   { href: '/visits', label: 'Kunjungan', icon: Stethoscope },
   { href: '/inventory', label: 'Inventaris', icon: Package },
   { href: '/reports', label: 'Laporan', icon: BarChart3 },
@@ -263,7 +263,7 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
                 })}
               </nav>
 
-              <div className="sideadd" ref={addRef}>
+              {/* <div className="sideadd" ref={addRef}>
                 <button
                   type="button"
                   className={addOpen ? 'sideadd__toggle is-open' : 'sideadd__toggle'}
@@ -320,7 +320,7 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+              </div> */}
 
               <nav className="sidenav sidenav--utility" aria-label="Bantuan dan pengaturan">
                 <p className="sidenav__label">Lainnya</p>
