@@ -5,11 +5,6 @@ import { SettingsShell } from '@/components/settings/settings-shell';
 import { CompanyForm } from './company-form';
 import { PersonalForm } from './personal-form';
 
-const roleLabel: Record<string, string> = {
-  school_admin: 'Admin sekolah',
-  staff: 'Staf UKS',
-};
-
 export default async function SettingsPage({
   searchParams,
 }: {
@@ -24,17 +19,9 @@ export default async function SettingsPage({
   if (!school) redirect('/');
 
   const params = await searchParams;
-  const canEdit = profile.role === 'school_admin';
 
   return (
-    <SettingsShell
-      actions={
-        <span className={canEdit ? 'spill spill--iris' : 'spill'}>
-          <i />
-          {roleLabel[profile.role] ?? 'Hanya lihat'}
-        </span>
-      }
-    >
+    <SettingsShell>
       <div className="set-stack">
         {params.ok && (
           <div className="note note--ok">
@@ -56,14 +43,12 @@ export default async function SettingsPage({
           key={`company:${school.slug ?? 'no-slug'}`}
           school={school}
           email={profile.email ?? user?.email ?? ''}
-          canEdit={canEdit}
         />
 
         <PersonalForm
           key={`personal:${profile.full_name ?? 'no-name'}`}
           fullName={profile.full_name ?? ''}
           email={profile.email ?? user?.email ?? ''}
-          role={roleLabel[profile.role] ?? profile.role}
         />
       </div>
       <p className="set-hint">

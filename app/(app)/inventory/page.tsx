@@ -9,6 +9,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import { Pager } from '@/components/ui/pager';
 import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { downloadCsv, parseCsv } from '@/lib/csv';
 import { fetchAllRows } from '@/lib/supabase/paginate';
 import { expiryState, isExpiryWarning, isLowStock, isMissingTable } from '@/lib/stock';
@@ -102,6 +103,7 @@ function InventoryPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { confirm } = useConfirm();
 
   const [medicines, setMedicines] = useState<MedicineRow[]>([]);
   const [now, setNow] = useState(0);
@@ -244,6 +246,13 @@ function InventoryPageInner() {
     const m = medicines.find((x) => x.id === id);
     const name = m?.name ?? 'obat';
 
+    const ok = await confirm({
+      title: 'Tambah stok obat?',
+      message: `Stok ${name} akan ditambah sebanyak ${qty}. Perubahan ini akan dicatat di riwayat stok.`,
+      confirmLabel: 'Ya, tambah stok',
+    });
+    if (!ok) return;
+
     // Jalur utama: RPC atomik (stok + log + batch dalam satu transaksi).
     const { data, error } = await supabase.rpc('restock_medicine', {
       p_medicine: id,
@@ -359,9 +368,20 @@ function InventoryPageInner() {
       return;
     }
 
+    const stock = parseInt(form.stock || '0', 10) || 0;
+
+    const ok = await confirm({
+      title: editing ? 'Simpan perubahan obat?' : 'Tambah obat baru?',
+      message: editing
+        ? `Perubahan data obat ${name} akan disimpan.`
+        : `Obat ${name} akan ditambahkan ke inventaris.`,
+      detail: !editing && stock > 0 ? `Stok awal yang akan dicatat: ${stock} ${form.unit}.` : undefined,
+      confirmLabel: editing ? 'Ya, simpan perubahan' : 'Ya, tambah obat',
+    });
+    if (!ok) return;
+
     setSaving(true);
 
-    const stock = parseInt(form.stock || '0', 10) || 0;
     const fields = {
       name,
       category: form.category.trim() || null,
@@ -433,9 +453,13 @@ function InventoryPageInner() {
   }
 
   async function removeMedicine(m: MedicineRow) {
-    const ok = window.confirm(
-      `Hapus obat ${m.name}? Riwayat keluar/masuk stok obat ini juga akan terhapus dan tidak bisa dikembalikan.`
-    );
+    const ok = await confirm({
+      title: 'Hapus obat?',
+      message: `Obat ${m.name} akan dihapus permanen.`,
+      detail: 'Riwayat keluar/masuk stok obat ini juga akan terhapus dan tidak bisa dikembalikan.',
+      confirmLabel: 'Ya, hapus obat',
+      tone: 'danger',
+    });
     if (!ok) return;
 
     const { error } = await supabase.from('medicines').delete().eq('id', m.id);
@@ -502,6 +526,14 @@ function InventoryPageInner() {
 
     const reason = [adjustForm.reason, adjustForm.note.trim()].filter(Boolean).join(' — ');
     const before = adjust.stock ?? 0;
+
+    const ok = await confirm({
+      title: 'Simpan koreksi stok?',
+      message: `Stok ${adjust.name} akan dikoreksi dari ${before} menjadi ${adjustTarget}.`,
+      detail: `Alasan: ${reason}`,
+      confirmLabel: 'Ya, simpan koreksi',
+    });
+    if (!ok) return;
 
     setAdjusting(true);
     const { data, error } = await supabase.rpc('adjust_medicine_stock', {
@@ -704,6 +736,15 @@ function InventoryPageInner() {
 
   async function runImport() {
     if (importRows.length === 0) return;
+
+    const ok = await confirm({
+      title: 'Impor data obat?',
+      message: `${importRows.length} data obat dari ${importName || 'berkas CSV'} akan ditambahkan ke inventaris.`,
+      detail: `${importSkipped} baris dilewati karena sudah ada.`,
+      confirmLabel: 'Ya, impor sekarang',
+    });
+    if (!ok) return;
+
     setImporting(true);
 
     let created = 0;

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { useFormStatus } from 'react-dom';
-import { FileText, HeartPulse, Lock, Save, Undo2 } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { FileText, HeartPulse, Save, Undo2 } from 'lucide-react';
 import { updateCompanyProfile } from '@/app/(app)/settings/actions';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 type SchoolForm = {
   id: string;
@@ -14,35 +14,41 @@ type SchoolForm = {
   is_active: boolean;
 };
 
-function SaveButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button type="submit" className="btn btn--primary" disabled={pending}>
-      <Save className="ico" />
-      {pending ? 'Menyimpan…' : 'Simpan profil'}
-    </button>
-  );
-}
-
 export function CompanyForm({
   school,
   email,
-  canEdit,
 }: {
   school: SchoolForm;
   email: string;
-  canEdit: boolean;
 }) {
   const [name, setName] = useState(school.name);
   const [slug, setSlug] = useState(school.slug ?? '');
   const [emailValue, setEmailValue] = useState(email);
   const [address, setAddress] = useState(school.address ?? '');
   const [phone, setPhone] = useState(school.phone ?? '');
+  const [saving, setSaving] = useState(false);
+  const { confirm } = useConfirm();
+
+  async function submitProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    const ok = await confirm({
+      title: 'Simpan profil sekolah?',
+      message: `Perubahan profil ${school.name} akan disimpan.`,
+      detail: 'Email login yang diubah langsung aktif pada login berikutnya.',
+      confirmLabel: 'Ya, simpan profil',
+    });
+    if (!ok) return;
+
+    setSaving(true);
+    await updateCompanyProfile(formData);
+  }
 
   return (
     <div className="set-grid">
       <form
-        action={updateCompanyProfile}
+        onSubmit={submitProfile}
         className="card set-form"
         onReset={() => {
           setName(school.name);
@@ -75,7 +81,6 @@ export function CompanyForm({
               minLength={2}
               maxLength={120}
               required
-              disabled={!canEdit}
               placeholder="Contoh: SMA Negeri 1 Bandung"
             />
           </div>
@@ -98,7 +103,6 @@ export function CompanyForm({
               }
               minLength={3}
               maxLength={60}
-              disabled={!canEdit}
               placeholder="sman-1-bandung"
             />
             <span className="field__hint">
@@ -118,7 +122,6 @@ export function CompanyForm({
               value={emailValue}
               onChange={(e) => setEmailValue(e.target.value)}
               required
-              disabled={!canEdit}
               placeholder="admin@sekolah.sch.id"
             />
             <span className="field__hint">
@@ -137,7 +140,6 @@ export function CompanyForm({
               onChange={(e) => setAddress(e.target.value)}
               maxLength={240}
               rows={3}
-              disabled={!canEdit}
               placeholder="Jalan, nomor, kota"
             />
           </div>
@@ -152,7 +154,6 @@ export function CompanyForm({
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               maxLength={40}
-              disabled={!canEdit}
               placeholder="(022) 1234567"
             />
           </div>
@@ -166,19 +167,15 @@ export function CompanyForm({
           </div>
         </div>
 
-        {!canEdit && (
-          <div className="note">
-            <Lock className="ico" />
-            <span>Hanya admin sekolah yang dapat mengubah profil ini.</span>
-          </div>
-        )}
-
         <div className="set-foot">
-          <button type="reset" className="btn btn--ghost" disabled={!canEdit}>
+          <button type="reset" className="btn btn--ghost">
             <Undo2 className="ico" />
             Kembalikan
           </button>
-          {canEdit && <SaveButton />}
+          <button type="submit" className="btn btn--primary" disabled={saving}>
+            <Save className="ico" />
+            {saving ? 'Menyimpan…' : 'Simpan profil'}
+          </button>
         </div>
       </form>
 

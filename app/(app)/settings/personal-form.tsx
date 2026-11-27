@@ -1,34 +1,39 @@
 'use client';
 
-import { useState } from 'react';
-import { useFormStatus } from 'react-dom';
+import { useState, type FormEvent } from 'react';
 import { UserRound, Save, Undo2 } from 'lucide-react';
 import { updateOwnProfile } from '@/app/(app)/settings/actions';
-
-function SaveButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button type="submit" className="btn btn--primary" disabled={pending}>
-      <Save className="ico" />
-      {pending ? 'Menyimpan…' : 'Simpan akun'}
-    </button>
-  );
-}
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 export function PersonalForm({
   fullName,
   email,
-  role,
 }: {
   fullName: string;
   email: string;
-  role: string;
 }) {
   const [name, setName] = useState(fullName);
+  const [saving, setSaving] = useState(false);
+  const { confirm } = useConfirm();
+
+  async function submitAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    const ok = await confirm({
+      title: 'Simpan akun?',
+      message: `Nama lengkap akan diperbarui menjadi ${name.trim() || fullName}.`,
+      confirmLabel: 'Ya, simpan akun',
+    });
+    if (!ok) return;
+
+    setSaving(true);
+    await updateOwnProfile(formData);
+  }
 
   return (
     <form
-      action={updateOwnProfile}
+      onSubmit={submitAccount}
       className="card set-form"
       onReset={() => setName(fullName)}
     >
@@ -40,7 +45,6 @@ export function PersonalForm({
             <span className="card__sub">Nama yang tampil di sidebar dan riwayat aktivitas.</span>
           </span>
         </div>
-        <span className="badge badge--plain">{role}</span>
       </div>
 
       <div className="set-fields">
@@ -68,14 +72,6 @@ export function PersonalForm({
           <input id="personal-email" value={email || '—'} readOnly disabled />
           <span className="field__hint">Ubah email lewat Profil sekolah di atas.</span>
         </div>
-
-        <div className="field">
-          <label className="field__label" htmlFor="personal-role">
-            Peran
-          </label>
-          <input id="personal-role" value={role} readOnly disabled />
-          <span className="field__hint">Perubahan peran hanya oleh admin Qrion.</span>
-        </div>
       </div>
 
       <div className="set-foot">
@@ -83,7 +79,10 @@ export function PersonalForm({
           <Undo2 className="ico" />
           Kembalikan
         </button>
-        <SaveButton />
+        <button type="submit" className="btn btn--primary" disabled={saving}>
+          <Save className="ico" />
+          {saving ? 'Menyimpan…' : 'Simpan akun'}
+        </button>
       </div>
     </form>
   );

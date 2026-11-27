@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { logClientActivity } from '@/lib/activity-client';
 import { useSearchParams } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { AppShell } from '@/components/layout/app-shell';
 import { visitStatusLabels } from '@/lib/visit-status';
 import type { DispenseResult, MedicineBatchRow, MedicineRow, StudentRow } from '@/lib/database.types';
@@ -53,6 +54,7 @@ function VisitForm() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { confirm } = useConfirm();
   const [student, setStudent] = useState<StudentRow | null>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<StudentRow[]>([]);
@@ -276,6 +278,20 @@ function VisitForm() {
       setError('Pilih siswa terlebih dahulu.');
       return;
     }
+
+    const ok = await confirm({
+      title: 'Simpan kunjungan?',
+      message: `Kunjungan ${student.full_name} akan dicatat.${
+        chiefComplaint.trim() ? ` Keluhan: ${chiefComplaint.trim()}.` : ''
+      }`,
+      detail:
+        selectedMeds.length > 0
+          ? `${selectedMeds.length} obat akan diberikan dan stoknya dikurangi otomatis.`
+          : undefined,
+      confirmLabel: 'Ya, simpan kunjungan',
+    });
+    if (!ok) return;
+
     setError(null);
     setSubmitting(true);
 

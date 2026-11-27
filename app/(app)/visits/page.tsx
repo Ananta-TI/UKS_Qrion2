@@ -9,6 +9,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import { Pager } from '@/components/ui/pager';
 import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   Search,
   ClipboardList,
@@ -128,6 +129,7 @@ function Portal({ children }: { children: React.ReactNode }) {
 export default function VisitsPage() {
   const supabase = createClient();
   const { toast } = useToast();
+  const { confirm } = useConfirm();
 
   const [visits, setVisits] = useState<VisitRow[]>([]);
   const [query, setQuery] = useState('');
@@ -315,6 +317,14 @@ export default function VisitsPage() {
 
   async function saveEdit() {
     if (!editing) return;
+
+    const ok = await confirm({
+      title: 'Simpan perubahan kunjungan?',
+      message: `Perubahan rekam medis ${editing.students?.full_name ?? 'siswa'} akan disimpan.`,
+      confirmLabel: 'Ya, simpan perubahan',
+    });
+    if (!ok) return;
+
     setSaving(true);
 
     const payload = {

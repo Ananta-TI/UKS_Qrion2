@@ -12,12 +12,11 @@ import {
   Pill,
   Plus,
   Stethoscope,
-  TrendingUp,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import { TrendChart } from '@/components/dashboard/trend-chart';
-import { getAuthUser, getSessionProfile } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth';
 import { fetchAllRows } from '@/lib/supabase/paginate';
 import { visitStatusLabels } from '@/lib/visit-status';
 import { DAY_MS, expiryState, isExpiryWarning, isLowStock } from '@/lib/stock';
@@ -69,13 +68,6 @@ function startOfDay(date: Date) {
 
 function dayKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-function greeting(hour: number) {
-  if (hour < 11) return 'Selamat pagi';
-  if (hour < 15) return 'Selamat siang';
-  if (hour < 18) return 'Selamat sore';
-  return 'Selamat malam';
 }
 
 function deltaText(delta: number) {
@@ -203,7 +195,6 @@ export default async function DashboardPage({
       .order('name', { ascending: true }),
   ]);
 
-  const { profile } = await getSessionProfile();
   const [visitsRes, medicinesRes] = await dataPromise;
 
   const visits = (visitsRes.data ?? []) as unknown as VisitRow[];
@@ -250,7 +241,6 @@ export default async function DashboardPage({
   ).size;
   const referralRate = percent(referredYear, yearTotal);
   const returnRate = percent(returnedYear, yearTotal);
-  const referredToday = todayVisits.filter((visit) => visit.final_status === 'referred').length;
 
   const periodVisits = visits.filter((visit) => inRange(visit, periodStart));
   const previousPeriodTotal = visits.filter((visit) =>
@@ -302,53 +292,10 @@ export default async function DashboardPage({
 
   const recentVisits = visits.slice(0, 5);
 
-  const firstName = (profile?.full_name ?? user.email ?? 'Petugas UKS').trim().split(/\s+/)[0];
-  const dateLabel = now.toLocaleDateString('id-ID', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
 
   return (
     <AppShell title="Dashboard" crumbs={[{ label: 'UKS', href: '/' }, { label: 'Dashboard' }]}>
       <div className="dash">
-        <div className="dash-greet">
-          <div>
-            <h2 className="dash-greet__title">
-              {greeting(now.getHours())}, {firstName}.
-            </h2>
-            <p className="dash-greet__sub">
-              {dateLabel} · <b>{todayCount} kunjungan</b> hari ini
-              {referredToday > 0 ? (
-                <>
-                  {' '}
-                  · <b>{referredToday} dirujuk</b>
-                </>
-              ) : null}
-              {lowStockAll.length > 0 ? (
-                <>
-                  {' '}
-                  · <b>{lowStockAll.length} obat</b> perlu ditambah stok
-                </>
-              ) : null}
-              {expiringAll.length > 0 ? (
-                <>
-                  {' '}
-                  · <b>{expiringAll.length} obat</b> mendekati kedaluwarsa
-                </>
-              ) : null}
-            </p>
-          </div>
-          <div className="dash-greet__actions">
-            <Link href="/visits/new" prefetch={false} className="btn btn--primary btn--sm">
-              <Plus className="ico" /> Catat kunjungan
-            </Link>
-            <Link href="/reports" prefetch={false} className="btn btn--ghost btn--sm">
-              <TrendingUp className="ico" /> Lihat laporan
-            </Link>
-          </div>
-        </div>
-
         <section className="dash__kpis" aria-label="Ringkasan kunjungan">
           <article className="kpi">
             <span className="kpi__ico kpi__ico--green">

@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { CommandPalette } from '@/components/layout/command-palette';
@@ -12,20 +12,18 @@ import { StickyHeadObserver } from '@/components/layout/sticky-head-observer';
 import { HeaderContext, PageHeader, type HeaderSpec } from '@/components/layout/page-header';
 import {
   LayoutDashboard,
-  Users,
   Stethoscope,
   Package,
   BarChart3,
   Activity,
   LogOut,
   Search,
-  Plus,
-  LifeBuoy,
   Settings,
-  Pill,
   Menu,
   X,
   ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 const pillSpring = { type: 'spring', stiffness: 380, damping: 32, mass: 0.7 } as const;
@@ -37,16 +35,7 @@ const tabs = [
   { href: '/inventory', label: 'Inventaris', icon: Package },
   { href: '/reports', label: 'Laporan', icon: BarChart3 },
   { href: '/activity', label: 'Aktivitas', icon: Activity },
-];
-
-const utilityTabs = [
-  { href: '/support', label: 'Bantuan', icon: LifeBuoy },
   { href: '/settings', label: 'Pengaturan', icon: Settings },
-];
-
-const addItems = [
-  { href: '/visits/new', label: 'Catat Kunjungan', desc: 'Rekam medis harian', icon: Stethoscope },
-  { href: '/inventory?add=1', label: 'Tambah Obat', desc: 'Stok inventaris UKS', icon: Pill },
 ];
 
 export type AppFrameUser = {
@@ -74,10 +63,16 @@ function initialsOf(name: string) {
 export function AppFrame({ children, user }: { children: React.ReactNode; user: AppFrameUser }) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [headerSpec, setHeaderSpec] = useState<HeaderSpec | null>(null);
-  const addRef = useRef<HTMLDivElement>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem('uks-sidebar-collapsed');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved === 'true') setSidebarCollapsed(true);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -93,27 +88,9 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAddOpen(false);
     setDrawerOpen(false);
+    setUserMenuOpen(false);
   }, [pathname]);
-
-  useEffect(() => {
-    if (!addOpen) return;
-
-    const onPointer = (e: PointerEvent) => {
-      if (addRef.current && !addRef.current.contains(e.target as Node)) setAddOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setAddOpen(false);
-    };
-
-    document.addEventListener('pointerdown', onPointer);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onPointer);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [addOpen]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -196,7 +173,7 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
 
       <aside
         id="app-sidebar"
-        className={drawerOpen ? 'sidebar is-open' : 'sidebar'}
+        className={`sidebar${drawerOpen ? ' is-open' : ''}${sidebarCollapsed ? ' is-collapsed' : ''}`}
         aria-label="Navigasi aplikasi"
       >
         <div className="sidebar__inner">
@@ -214,6 +191,26 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                className="sidebar__collapse"
+                onClick={() =>
+                  setSidebarCollapsed((v) => {
+                    const next = !v;
+                    window.localStorage.setItem('uks-sidebar-collapsed', String(next));
+                    document.documentElement.classList.toggle('sidebar-collapsed', next);
+                    return next;
+                  })
+                }
+                aria-label={sidebarCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
+                title={sidebarCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
+              >
+                {sidebarCollapsed ? (
+                  <PanelLeftOpen className="ico" strokeWidth={1.8} />
+                ) : (
+                  <PanelLeftClose className="ico" strokeWidth={1.8} />
+                )}
+              </button>
+              <button
+                type="button"
                 className="sidebar__close"
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Tutup menu"
@@ -224,12 +221,6 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
           </div>
 
           <div className="sidebar__scroll">
-            <button type="button" className="side-search" onClick={openPalette} aria-label="Cari (Ctrl+K)">
-              <Search className="ico" strokeWidth={1.7} />
-              <span>Cari apa saja</span>
-              <kbd>Ctrl K</kbd>
-            </button>
-
             <LayoutGroup id="app-nav">
               <nav className="sidenav" aria-label="Navigasi utama">
                 <p className="sidenav__label">Menu</p>
@@ -262,125 +253,69 @@ export function AppFrame({ children, user }: { children: React.ReactNode; user: 
                   );
                 })}
               </nav>
-
-              {/* <div className="sideadd" ref={addRef}>
-                <button
-                  type="button"
-                  className={addOpen ? 'sideadd__toggle is-open' : 'sideadd__toggle'}
-                  onClick={() => setAddOpen((v) => !v)}
-                  aria-haspopup="menu"
-                  aria-expanded={addOpen}
-                >
-                  <span className="sideadd__ico">
-                    <Plus className="ico" strokeWidth={1.8} />
-                  </span>
-                  <span className="sideadd__text">
-                    <b>Tambah data</b>
-                    <small>Kunjungan atau obat</small>
-                  </span>
-                  <ChevronDown className="ico sideadd__chev" strokeWidth={1.8} />
-                </button>
-
-                <AnimatePresence initial={false}>
-                  {addOpen && (
-                    <motion.div
-                      className="sideadd__menu"
-                      role="menu"
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.18, ease: 'easeOut' }}
-                    >
-                      <div className="sideadd__menuInner">
-                        {addItems.map((item) => {
-                          const Icon = item.icon;
-                          return (
-                            <Link
-                              key={item.href}
-                              href={item.href}
-                              prefetch={false}
-                              role="menuitem"
-                              className="sideadd__item"
-                              onClick={() => {
-                                setAddOpen(false);
-                                setDrawerOpen(false);
-                              }}
-                            >
-                              <span className="sideadd__itemIco">
-                                <Icon className="ico" strokeWidth={1.7} />
-                              </span>
-                              <span className="sideadd__itemText">
-                                <b>{item.label}</b>
-                                <small>{item.desc}</small>
-                              </span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div> */}
-
-              <nav className="sidenav sidenav--utility" aria-label="Bantuan dan pengaturan">
-                <p className="sidenav__label">Lainnya</p>
-                {utilityTabs.map((t) => {
-                  const Icon = t.icon;
-                  const active = isActive(pathname, t.href);
-                  return (
-                    <Link
-                      key={t.href}
-                      href={t.href}
-                      prefetch={false}
-                      className="sidenav__item"
-                      aria-current={active ? 'page' : undefined}
-                      onClick={() => setDrawerOpen(false)}
-                    >
-                      {active && (
-                        <motion.span
-                          layoutId="app-nav-pill"
-                          className="sidenav__pill"
-                          transition={pillSpring}
-                          initial={false}
-                        />
-                      )}
-                      <span className="sidenav__ico">
-                        <Icon className="ico" strokeWidth={1.7} />
-                      </span>
-                      <span className="sidenav__text">{t.label}</span>
-                      {active && <span className="sidenav__dot" aria-hidden="true" />}
-                    </Link>
-                  );
-                })}
-              </nav>
             </LayoutGroup>
           </div>
 
-          <div className="sidebar__foot">
-            <div className="sideuser">
-              <span className="av av--md av--iris">{initialsOf(user.name)}</span>
-              <span className="sideuser__text">
-                <b title={user.name}>{user.name}</b>
-                <small>{user.role}</small>
-                {user.school && (
-                  <span className="sideuser__school" title={user.school}>
-                    {user.school}
-                  </span>
-                )}
-              </span>
-            </div>
-            <form action="/auth/signout" method="post" className="sidebar__outform">
-              <button type="submit" className="sidebar__out">
-                <LogOut className="ico" strokeWidth={1.7} />
-                <span>Keluar</span>
-              </button>
-            </form>
-          </div>
         </div>
       </aside>
 
+      <header className={`topbar${sidebarCollapsed ? ' is-collapsed' : ''}`}>
+        <div className="topbar__school">
+          <span className="topbar__logo">Q</span>
+          <span className="topbar__schoolText">
+            <b>{user.school ?? 'UKS Qrion'}</b>
+            <small>Panam, Pekanbaru</small>
+          </span>
+        </div>
+        <span className="topbar__sp" />
+        <div className="topbar__actions">
+          <Link href="/support" prefetch={false} className="topbar__tool topbar__tool--amber" title="Upgrade">
+            <span className="topbar__toolIco">★</span>
+            <span>Upgrade</span>
+          </Link>
+          <Link href="/support" prefetch={false} className="topbar__tool topbar__tool--violet" title="Panduan">
+            <span className="topbar__toolIco">▤</span>
+            <span>Panduan</span>
+          </Link>
+          <span className="topbar__switch">
+            <span className="topbar__toolIco topbar__toolIco--green">⊞</span>
+            <span>Switch Apps</span>
+            <ChevronDown className="ico" style={{ width: 14, height: 14 }} />
+          </span>
+          <div className="topbar__userWrap">
+            <button
+              type="button"
+              className="topbar__user"
+              onClick={() => setUserMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+            >
+              <span className="topbar__avatar">{initialsOf(user.name).charAt(0)}</span>
+              <span className="topbar__userText">
+                <b>{user.name}</b>
+                <small>{user.role}</small>
+              </span>
+              <ChevronDown className="ico" style={{ width: 14, height: 14 }} />
+            </button>
+            {userMenuOpen && (
+              <div className="topbar__menu" role="menu">
+                <div className="topbar__menuHead">
+                  <b>{user.name}</b>
+                  <small>{user.role}</small>
+                </div>
+                <form action="/auth/signout" method="post">
+                  <button type="submit" className="topbar__menuItem" role="menuitem">
+                    <LogOut className="ico" strokeWidth={1.7} /> Keluar
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
       <HeaderContext.Provider value={setHeaderSpec}>
-        <div className={pathname.startsWith('/settings') ? 'app app--settings' : 'app'}>
+        <div className={pathname.startsWith('/settings') ? 'app app--settings' : 'app'} data-collapsed={sidebarCollapsed ? 'true' : 'false'}>
           <StickyHeadObserver />
           <main className="main">
             <PageHeader spec={headerSpec} />

@@ -8,6 +8,7 @@ import { logClientActivity } from '@/lib/activity-client';
 import { AppShell } from '@/components/layout/app-shell';
 import { CountUp } from '@/components/ui/count-up';
 import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { fetchAllRows } from '@/lib/supabase/paginate';
 import { downloadCsv } from '@/lib/csv';
 import { useViewMode, ViewToggle } from '@/components/ui/view-toggle';
@@ -76,6 +77,7 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
 export default function StudentsPage() {
   const supabase = createClient();
   const { toast } = useToast();
+  const { confirm } = useConfirm();
   const [query, setQuery] = useState('');
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -211,6 +213,13 @@ export default function StudentsPage() {
 
     if (!editing) return;
 
+    const ok = await confirm({
+      title: 'Simpan perubahan siswa?',
+      message: `Data siswa ${fullName} akan diperbarui.`,
+      confirmLabel: 'Ya, simpan perubahan',
+    });
+    if (!ok) return;
+
     setSaving(true);
     setFormError(null);
 
@@ -258,9 +267,13 @@ export default function StudentsPage() {
   }
 
   async function remove(s: StudentRow) {
-    const ok = window.confirm(
-      `Hapus siswa ${s.full_name}? Seluruh riwayat kunjungan siswa ini juga akan terhapus dan tidak bisa dikembalikan.`
-    );
+    const ok = await confirm({
+      title: 'Hapus siswa?',
+      message: `Siswa ${s.full_name} akan dihapus permanen.`,
+      detail: 'Seluruh riwayat kunjungan siswa ini juga akan terhapus dan tidak bisa dikembalikan.',
+      confirmLabel: 'Ya, hapus siswa',
+      tone: 'danger',
+    });
     if (!ok) return;
 
     setDeletingId(s.id);

@@ -27,6 +27,7 @@ import { fetchAllRows } from '@/lib/supabase/paginate';
 import { visitStatusLabel, visitStatusLabels } from '@/lib/visit-status';
 import { exportReportsExcel } from '@/lib/reports/export-excel';
 import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 // Grafik Bklit dimuat terpisah agar tidak memperbesar bundle awal halaman Laporan.
 const ReportAreaChart = dynamic(() => import('@/components/charts/report-area-chart'), {
@@ -401,6 +402,7 @@ function Gauge({ pct }: { pct: number }) {
 export default function ReportsPage() {
   const supabase = createClient();
   const { toast } = useToast();
+  const { confirm } = useConfirm();
   const [visits, setVisits] = useState<VisitRow[]>([]);
   const [medicines, setMedicines] = useState<MedicineRow[]>([]);
   const [medicineLogs, setMedicineLogs] = useState<MedicineLogRow[]>([]);
@@ -679,6 +681,13 @@ export default function ReportsPage() {
     const name = window.prompt('Nama laporan:', fallback)?.trim();
     if (!name) return;
 
+    const ok = await confirm({
+      title: 'Simpan laporan?',
+      message: `Laporan "${name}" akan disimpan.`,
+      confirmLabel: 'Ya, simpan laporan',
+    });
+    if (!ok) return;
+
     const optimistic: SavedReport = {
       id: crypto.randomUUID(),
       name,
@@ -755,6 +764,15 @@ export default function ReportsPage() {
   }
 
   async function deleteReport(id: string) {
+    const item = saved.find((r) => r.id === id);
+    const ok = await confirm({
+      title: 'Hapus laporan tersimpan?',
+      message: `Laporan "${item?.name ?? 'ini'}" akan dihapus.`,
+      confirmLabel: 'Ya, hapus laporan',
+      tone: 'danger',
+    });
+    if (!ok) return;
+
     if (savedSource === 'server') {
       const { error } = await supabase.from('saved_reports').delete().eq('id', id);
       if (!error) {

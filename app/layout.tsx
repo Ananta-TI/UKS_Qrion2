@@ -1,6 +1,7 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/components/ui/toast';
+import { ConfirmProvider } from '@/components/ui/confirm-dialog';
 
 // Inter dipakai sebagai pengganti SF Pro di platform non-Apple. Di macOS/iOS
 // tumpukan font di globals.css memilih -apple-system lebih dulu (SF asli).
@@ -24,8 +25,17 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="id" className={inter.variable}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem('uks-sidebar-collapsed')==='true')document.documentElement.classList.add('sidebar-collapsed')}catch(e){}`,
+          }}
+        />
+      </head>
       <body>
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </ToastProvider>
       </body>
     </html>
   );

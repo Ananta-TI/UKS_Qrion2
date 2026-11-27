@@ -26,10 +26,6 @@ export async function updateCompanyProfile(formData: FormData) {
   if (!profile) redirect('/auth/signin');
   if (!profile.school_id) redirect('/auth/signout?reason=inactive');
 
-  if (profile.role !== 'school_admin') {
-    fail('Hanya admin sekolah yang dapat mengubah profil.');
-  }
-
   const name = String(formData.get('name') ?? '').trim();
   const slugInput = String(formData.get('slug') ?? '').trim();
   const email = String(formData.get('email') ?? '').trim().toLowerCase();

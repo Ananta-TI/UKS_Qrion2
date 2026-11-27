@@ -41,7 +41,6 @@ export default async function SettingsUsersPage() {
     .order('created_at', { ascending: true });
 
   const rows = members ?? [];
-  const canManage = profile.role === 'school_admin';
 
   return (
     <SettingsShell
@@ -105,7 +104,6 @@ export default async function SettingsUsersPage() {
                 Penambahan akun, reset password, dan perubahan peran dilakukan lewat tim dukungan agar hak akses
                 tetap terkontrol.
               </p>
-              {!canManage && <p>Hanya admin sekolah yang dapat meminta perubahan akun.</p>}
             </div>
             <Link href="/support" prefetch={false} className="btn btn--ghost btn--sm">
               Hubungi dukungan
